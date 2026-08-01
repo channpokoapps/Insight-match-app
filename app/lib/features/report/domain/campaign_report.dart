@@ -20,9 +20,11 @@ sealed class CampaignReport {
       );
     }
 
-    final int participantCount = (json['participant_count'] as num?)?.toInt() ?? 0;
+    final int participantCount =
+        (json['participant_count'] as num?)?.toInt() ?? 0;
     if (participantCount < kAnonymityThreshold) {
-      return const ReportUnavailable(reason: ReportUnavailableReason.kAnonymity);
+      return const ReportUnavailable(
+          reason: ReportUnavailableReason.kAnonymity);
     }
 
     final Map<String, dynamic> metrics = Map<String, dynamic>.from(
@@ -34,7 +36,8 @@ sealed class CampaignReport {
         for (final ReportMetricKey key in ReportMetricKey.values)
           if (metrics[key.key] != null)
             key: ReportMetric.fromJson(
-              Map<String, dynamic>.from(metrics[key.key] as Map<dynamic, dynamic>),
+              Map<String, dynamic>.from(
+                  metrics[key.key] as Map<dynamic, dynamic>),
             ),
       },
       generatedAt: json['generated_at'] == null
@@ -84,7 +87,8 @@ enum ReportUnavailableReason {
   final String message;
 
   static ReportUnavailableReason fromKey(String? key) {
-    for (final ReportUnavailableReason reason in ReportUnavailableReason.values) {
+    for (final ReportUnavailableReason reason
+        in ReportUnavailableReason.values) {
       if (reason.key == key) {
         return reason;
       }
@@ -117,8 +121,10 @@ class ReportMetric {
         median: (json['median'] as num?)?.toDouble(),
         total: (json['total'] as num?)?.toDouble(),
         histogram: <ReportBin>[
-          for (final dynamic bin in (json['histogram'] as List<dynamic>?) ?? <dynamic>[])
-            ReportBin.fromJson(Map<String, dynamic>.from(bin as Map<dynamic, dynamic>)),
+          for (final dynamic bin
+              in (json['histogram'] as List<dynamic>?) ?? <dynamic>[])
+            ReportBin.fromJson(
+                Map<String, dynamic>.from(bin as Map<dynamic, dynamic>)),
         ],
       );
 

@@ -1,0 +1,10 @@
+# 実際の接続情報を含む env ファイル（*.example.json のみコミットする）
+env/*.json
+!env/*.example.json
+
+# Firebase（プロジェクト ID・デプロイキャッシュはコミットしない）
+.firebaserc
+.firebase/
+
+# OS
+.DS_Store

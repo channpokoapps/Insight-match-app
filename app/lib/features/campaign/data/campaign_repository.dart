@@ -40,7 +40,8 @@ class CampaignRepository {
         },
       );
       return (result as List<dynamic>)
-          .map((dynamic e) => CampaignListItem.fromJson(e as Map<String, dynamic>))
+          .map((dynamic e) =>
+              CampaignListItem.fromJson(e as Map<String, dynamic>))
           .toList();
     } on Object catch (e, s) {
       final AppFailure failure = AppFailure.from(e);
@@ -78,7 +79,8 @@ class CampaignRepository {
           'p_message': message,
         },
       );
-      AppLogger.info('campaign.applied', <String, Object?>{'campaign_id': campaignId});
+      AppLogger.info(
+          'campaign.applied', <String, Object?>{'campaign_id': campaignId});
       return result as String;
     } on Object catch (e, s) {
       final AppFailure failure = AppFailure.from(e);
@@ -115,13 +117,12 @@ final Provider<CampaignRepository> campaignRepositoryProvider =
 final FutureProviderFamily<List<CampaignListItem>, CampaignListQuery>
     campaignListProvider =
     FutureProvider.family<List<CampaignListItem>, CampaignListQuery>(
-  (Ref ref, CampaignListQuery query) => ref
-      .watch(campaignRepositoryProvider)
-      .listForCreator(
-        prefectureId: query.prefectureId,
-        genreId: query.genreId,
-        minReward: query.minReward,
-      ),
+  (Ref ref, CampaignListQuery query) =>
+      ref.watch(campaignRepositoryProvider).listForCreator(
+            prefectureId: query.prefectureId,
+            genreId: query.genreId,
+            minReward: query.minReward,
+          ),
 );
 
 class CampaignListQuery {

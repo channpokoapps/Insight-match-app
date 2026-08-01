@@ -30,7 +30,7 @@ irm https://deno.land/install.ps1 | iex
 ## 2. 初回セットアップ
 
 ```powershell
-git clone <repository-url> app2
+git clone <repository-url> insight-match-app
 cd app2
 
 # --- Supabase ---
@@ -43,19 +43,21 @@ supabase test db
 # --- Flutter ---
 cd app
 flutter pub get
-flutter pub run build_runner build --delete-conflicting-outputs
 ```
 
 `supabase start` の出力に含まれる `API URL` と `anon key` を控えます。
 
 ## 3. 環境変数
 
-`env/local.json` を作成します（**このファイルは Git にコミットしない**）。
+`env/local.example.json` をコピーして `env/local.json` を作成します
+（**このファイルは Git にコミットしない**。gitignore 済み）。
 
 ```json
 {
   "SUPABASE_URL": "http://127.0.0.1:54321",
-  "SUPABASE_ANON_KEY": "<supabase start が表示した anon key>"
+  "SUPABASE_ANON_KEY": "<supabase start が表示した anon key>",
+  "GOOGLE_WEB_CLIENT_ID": "",
+  "IS_PRODUCTION": false
 }
 ```
 
@@ -107,14 +109,11 @@ git commit -m "feat(campaign): 案件作成フォームを追加 (FR-CMP-03)"
 - 既存マイグレーションを書き換えない（適用済み環境と乖離する）。修正は新しいファイルで行う。
 - ファイル名は `supabase migration new` が付ける連番（タイムスタンプ）に従う。初期構築分のみ `0001_`〜`0006_` の固定連番を使っている。
 
-### コード生成
+### モデルの書き方
 
-`freezed` / `json_serializable` を使うモデルを変更したら：
-
-```powershell
-cd app
-flutter pub run build_runner watch --delete-conflicting-outputs
-```
+モデルは**不変クラス + 手書き `fromJson`** で書く（AGENTS.md §3）。
+freezed / build_runner によるコード生成は使わない。
+形の担保は `app/test/` の単体テストで行う。
 
 ## 5. コミットメッセージ
 

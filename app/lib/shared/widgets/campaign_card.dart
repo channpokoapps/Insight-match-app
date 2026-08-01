@@ -56,7 +56,8 @@ class CampaignCard extends StatelessWidget {
               if (masked)
                 _MaskedLine(theme: theme)
               else
-                Text(campaign.rewardDescription, style: theme.textTheme.bodyMedium),
+                Text(campaign.rewardDescription,
+                    style: theme.textTheme.bodyMedium),
 
               const SizedBox(height: 8),
               Text(

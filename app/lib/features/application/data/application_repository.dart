@@ -40,8 +40,8 @@ class ApplicationRepository {
       final dynamic result = await _client.rpc<dynamic>('list_my_applications');
       final List<dynamic> rows = (result as List<dynamic>?) ?? <dynamic>[];
       return rows
-          .map((dynamic e) =>
-              MyApplication.fromJson(Map<String, dynamic>.from(e as Map<dynamic, dynamic>)))
+          .map((dynamic e) => MyApplication.fromJson(
+              Map<String, dynamic>.from(e as Map<dynamic, dynamic>)))
           .toList();
     } on Object catch (e, s) {
       final AppFailure failure = AppFailure.from(e);

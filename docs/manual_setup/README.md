@@ -28,7 +28,7 @@
 | 3 | [supabase.md](supabase.md) | Supabase プロジェクトの作成と本番設定 | 高 |
 | 4 | [domain.md](domain.md) | ドメイン取得と、規約ページの公開 | 高 |
 | 5 | [legal.md](legal.md) | 利用規約・プライバシーポリシー・ステマ規制対応 | 高 |
-| 6 | [firebase_fcm.md](firebase_fcm.md) | プッシュ通知（FCM）の設定 | 中 |
+| 6 | [gcp_firebase.md](gcp_firebase.md) | Firebase（お試し Web の Hosting・GA4 計測・FCM）の設定 | 高 |
 | 7 | [assets.md](assets.md) | アイコン・ストア画像・**審査用の操作動画** | 中 |
 | 8 | [google_play.md](google_play.md) | Google Play への申請 | 高 |
 | 9 | [admob.md](admob.md) | 広告（AdMob）の設定 | 低 |
@@ -154,7 +154,7 @@ flowchart TD
 - [ ] スクリーンショット（スマホ用 2〜8 枚）を撮影した
 - [ ] **Meta 審査用の操作動画**を撮影した
 
-→ 詳細: [firebase_fcm.md](firebase_fcm.md) / [assets.md](assets.md)
+→ 詳細: [gcp_firebase.md](gcp_firebase.md) / [assets.md](assets.md)
 
 ### フェーズ 6: Google Play
 
@@ -275,7 +275,7 @@ flowchart TD
 | `OI-05` | サービス運営主体（法人格・所在地） | [accounts.md](accounts.md) |
 | `OI-07` | 広告の実装方式と表示位置 | [admob.md](admob.md) |
 | `OI-08` | 投稿者の年齢制限 | [legal.md](legal.md) / [google_play.md](google_play.md) |
-| `OI-11` | プッシュ通知基盤 | [firebase_fcm.md](firebase_fcm.md) |
+| `OI-11` | プッシュ通知基盤 | [gcp_firebase.md](gcp_firebase.md) |
 | `OI-17` | SNS トークンの暗号化方式 | [supabase.md](supabase.md) |
 | `OI-37` | Instagram の取得可能指標の最終確認 | [meta_instagram.md](meta_instagram.md) |
 | `OI-39` | 各サービスの最新価格の確認 | このファイルの 5 章 |

@@ -140,7 +140,10 @@ class CriteriaGroup extends Criteria {
   @override
   int get depth => children.isEmpty
       ? 1
-      : 1 + children.map((Criteria c) => c.depth).reduce((int a, int b) => a > b ? a : b);
+      : 1 +
+          children
+              .map((Criteria c) => c.depth)
+              .reduce((int a, int b) => a > b ? a : b);
 
   @override
   int get leafCount =>

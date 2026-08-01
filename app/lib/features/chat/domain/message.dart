@@ -28,7 +28,9 @@ class ChatMessage {
       createdAt: DateTime.parse(json['created_at'] as String),
       body: json['body'] as String?,
       imagePath: json['image_path'] as String?,
-      readAt: json['read_at'] == null ? null : DateTime.parse(json['read_at'] as String),
+      readAt: json['read_at'] == null
+          ? null
+          : DateTime.parse(json['read_at'] as String),
       counterpartAliasNo: (json['counterpart_alias_no'] as num?)?.toInt(),
     );
   }

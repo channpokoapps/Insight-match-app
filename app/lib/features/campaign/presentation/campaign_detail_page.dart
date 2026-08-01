@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/error/app_failure.dart';
+import '../../../core/platform/platform_capability.dart';
+import '../../../shared/widgets/install_prompt.dart';
 import '../data/campaign_repository.dart';
 import '../domain/campaign.dart';
 
@@ -50,6 +52,15 @@ class _BodyState extends ConsumerState<_Body> {
   bool _submitting = false;
 
   Future<void> _apply() async {
+    // Web お試し版ではサーバーに投げる前にインストール導線を出す。
+    // 権限の担保はあくまで RLS / RPC 側（AGENTS.md R-8）。
+    if (!ref
+        .read(platformCapabilityProvider)
+        .isAvailable(AppFeature.campaignApplication)) {
+      await showInstallPromptSheet(
+          context, ref, AppFeature.campaignApplication);
+      return;
+    }
     setState(() => _submitting = true);
     try {
       await ref.read(campaignRepositoryProvider).apply(widget.campaign.id);
@@ -88,7 +99,6 @@ class _BodyState extends ConsumerState<_Body> {
           const SizedBox(height: 4),
           Text(campaign.storeName, style: theme.textTheme.bodyMedium),
           const SizedBox(height: 16),
-
           if (body == null) ...<Widget>[
             Card(
               color: theme.colorScheme.surfaceContainerHighest,

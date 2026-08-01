@@ -1,0 +1,6 @@
+{
+    "SUPABASE_URL": "https://<project-ref>.supabase.co",
+    "SUPABASE_ANON_KEY": "Supabase ダッシュボード > Settings > API の anon key（service_role は絶対に使わない）",
+    "GOOGLE_WEB_CLIENT_ID": "GCP の「ウェブ アプリケーション」OAuth クライアント ID（docs/manual_setup/supabase.md §4.2）",
+    "IS_PRODUCTION": true
+}

@@ -1,8 +1,6 @@
 include: package:flutter_lints/flutter.yaml
 
 analyzer:
-  plugins:
-    - custom_lint
   exclude:
     - "**/*.g.dart"
     - "**/*.freezed.dart"
@@ -24,6 +22,10 @@ linter:
     prefer_const_constructors: true
     prefer_const_declarations: true
     unawaited_futures: true
-    require_trailing_commas: true
+    # trailing comma は Dart 3.9 の新フォーマッタ（tall style）が管理するため lint では強制しない
+    require_trailing_commas: false
     use_super_parameters: true
     sort_pub_dependencies: false
+
+    # 環境変数キーや上限値などは SCREAMING_SNAKE_CASE の定数名を許容する
+    constant_identifier_names: false

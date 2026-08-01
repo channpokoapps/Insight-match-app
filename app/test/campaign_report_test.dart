@@ -1,4 +1,4 @@
-import 'package:app2/features/report/domain/campaign_report.dart';
+import 'package:insight_match/features/report/domain/campaign_report.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

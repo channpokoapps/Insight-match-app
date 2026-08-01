@@ -88,10 +88,9 @@ class ChatRepository {
 
   Future<void> markRead(String messageId) async {
     try {
-      await _client
-          .from('messages')
-          .update(<String, dynamic>{'read_at': DateTime.now().toUtc().toIso8601String()})
-          .eq('id', messageId);
+      await _client.from('messages').update(<String, dynamic>{
+        'read_at': DateTime.now().toUtc().toIso8601String()
+      }).eq('id', messageId);
     } on Object catch (e, s) {
       final AppFailure failure = AppFailure.from(e);
       AppLogger.error('chat.mark_read_failed', failure.code, s);
@@ -100,11 +99,13 @@ class ChatRepository {
   }
 }
 
-final Provider<ChatRepository> chatRepositoryProvider = Provider<ChatRepository>(
+final Provider<ChatRepository> chatRepositoryProvider =
+    Provider<ChatRepository>(
   (Ref ref) => ChatRepository(ref.watch(supabaseClientProvider)),
 );
 
 final FutureProviderFamily<List<ChatMessage>, String> chatMessagesProvider =
     FutureProvider.family<List<ChatMessage>, String>(
-  (Ref ref, String roomId) => ref.watch(chatRepositoryProvider).listMessages(roomId),
+  (Ref ref, String roomId) =>
+      ref.watch(chatRepositoryProvider).listMessages(roomId),
 );

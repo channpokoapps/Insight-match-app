@@ -8,7 +8,16 @@ class Env {
   static const String supabaseUrl = String.fromEnvironment('SUPABASE_URL');
 
   /// anon キーのみを保持する。RLS と RPC が権限を担保する前提。
-  static const String supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
+  static const String supabaseAnonKey =
+      String.fromEnvironment('SUPABASE_ANON_KEY');
+
+  /// GCP の「ウェブ アプリケーション」OAuth クライアント ID。
+  ///
+  /// Android の Google サインインで `serverClientId` として使う
+  /// （docs/manual_setup/supabase.md §4.2）。未設定の間は
+  /// Google サインインボタンがエラーメッセージを表示する。
+  static const String googleWebClientId =
+      String.fromEnvironment('GOOGLE_WEB_CLIENT_ID');
 
   static const bool isProduction = bool.fromEnvironment('IS_PRODUCTION');
 

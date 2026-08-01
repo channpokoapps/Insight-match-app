@@ -80,12 +80,18 @@ docs/               要件定義書・ADR・API 仕様・バックログ
 - 横断的な基盤は `lib/core/`、共有ウィジェットは `lib/shared/`。
 - 状態管理は **Riverpod**。`StatefulWidget` の `setState` はローカルな UI 状態のみに使う。
 - ルーティングは **go_router**。認証・ロールによるリダイレクトは 1 か所に集約する。
-- モデルは **freezed + json_serializable**。手書きの `fromJson` を書かない。
+- モデルは**不変クラス + 手書き `fromJson`** とする（RPC の返却は形が単純で、コード生成の
+  ビルド時間・依存衝突に見合わないため。`app/test/` の単体テストで形を担保する）。
+  freezed / build_runner は使わない。
 
 ### ルール
 
 - **PR依頼者向けの画面・モデルに、投稿者のインサイト値や識別情報を持つフィールドを定義しない。** 型として存在させないことが最大の防御になる。
 - Supabase の呼び出しは `data/` レイヤの Repository に閉じ込める。Widget から直接 `Supabase.instance` を触らない。
+- **Web 版は閲覧専用のお試し版**。応募・チャット・SNS 連携などのアクション UI は、
+  `kIsWeb` を直接見ずに `lib/core/platform/platform_capability.dart` で可否を判定し、
+  不可なら `lib/shared/widgets/install_prompt.dart` のインストール導線を表示する。
+  ただし**権限の担保はあくまでサーバー側（RLS / RPC）**であり、この判定は UI の出し分けにすぎない。
 - インサイト数値を表示する画面には、必ず**最終同期日時**を併記する。
 - 例外は握りつぶさない。ユーザーに見せるメッセージは「原因」と「次の行動」を含める。
 - コメントは「コードから読み取れないこと」だけを 1 行で書く。処理の言い換えを書かない。

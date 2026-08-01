@@ -1,5 +1,5 @@
-import 'package:app2/core/error/app_failure.dart';
-import 'package:app2/features/chat/domain/message.dart';
+import 'package:insight_match/core/error/app_failure.dart';
+import 'package:insight_match/features/chat/domain/message.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -13,19 +13,21 @@ void main() {
     });
 
     test('通信エラーを分類できる', () {
-      final AppFailure failure = AppFailure.from(Exception('SocketException: failed'));
+      final AppFailure failure =
+          AppFailure.from(Exception('SocketException: failed'));
       expect(failure.kind, FailureKind.network);
     });
 
     test('未知の例外の内容を画面に出さない', () {
-      final AppFailure failure =
-          AppFailure.from(Exception('duplicate key value violates unique constraint'));
+      final AppFailure failure = AppFailure.from(
+          Exception('duplicate key value violates unique constraint'));
       expect(failure.kind, FailureKind.unknown);
       expect(failure.message.contains('constraint'), isFalse);
     });
 
     test('toString に元の例外内容を含めない', () {
-      final AppFailure failure = AppFailure.from(Exception('secret token abc123'));
+      final AppFailure failure =
+          AppFailure.from(Exception('secret token abc123'));
       expect(failure.toString().contains('abc123'), isFalse);
     });
   });

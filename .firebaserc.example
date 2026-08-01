@@ -1,0 +1,6 @@
+{
+  "$comment": "Firebase プロジェクト作成後、このファイルを .firebaserc にコピーしてプロジェクト ID を設定する（.firebaserc は gitignore 済み）。Shift Navi とは別プロジェクトを使うこと（docs/manual_setup/gcp_firebase.md 参照）。",
+  "projects": {
+    "default": "insight-match-dev-XXXXX"
+  }
+}

@@ -1,4 +1,4 @@
-import 'package:app2/features/application/domain/application.dart';
+import 'package:insight_match/features/application/domain/application.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -32,7 +32,8 @@ void main() {
         };
 
     test('連番のみで投稿者を表す', () {
-      final ApplicationForClient app = ApplicationForClient.fromJson(validJson());
+      final ApplicationForClient app =
+          ApplicationForClient.fromJson(validJson());
       expect(app.aliasNo, 3);
       expect(app.displayName, '投稿者C');
       expect(app.status, ApplicationStatus.matched);
@@ -59,7 +60,8 @@ void main() {
 
   group('ApplicationStatus', () {
     test('未知の値でも落ちない', () {
-      expect(ApplicationStatus.fromKey('unknown_value'), ApplicationStatus.applied);
+      expect(ApplicationStatus.fromKey('unknown_value'),
+          ApplicationStatus.applied);
       expect(ApplicationStatus.fromKey(null), ApplicationStatus.applied);
     });
 

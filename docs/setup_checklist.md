@@ -104,7 +104,7 @@ VS Code を開くと `.vscode/extensions.json` に沿って拡張機能の推奨
 
 ```powershell
 cd app
-flutter create . --project-name app2 --org com.example --platforms=android
+flutter create . --project-name insight_match --org app.insightmatch --platforms=android,web
 ```
 
 【要確認】`--org` は逆ドメイン形式のアプリケーション ID になります（例: `jp.co.yourcompany`）。**一度ストアに公開すると変更できません**ので、A-1 の 5 と合わせて先に決めてください（`OI-05` に関連）。
@@ -223,13 +223,9 @@ flutter test
 flutter run --dart-define-from-file=..\env\local.json
 ```
 
-【事実】`freezed` / `json_serializable` は `pubspec.yaml` に入っていますが、コード生成は**まだ使っていません**（`build_runner` を実行できない環境で書いたため、`fromJson` は手書きです）。
-
-【推奨】別PCで `build_runner` が使えるようになったら、まず既存モデルを 1 つだけ freezed に移してみて、生成物と手書きの差分を確認してから残りを移してください。一度に全部やると差分が読めなくなります。
-
-```powershell
-dart run build_runner build --delete-conflicting-outputs
-```
+【決定済み（2026-08）】モデルは**手書き `fromJson` を正式採用**し、freezed / build_runner は
+依存からも削除しました（AGENTS.md §3 参照。ビルド時間と依存衝突の回避のため）。
+コード生成の実行は不要です。
 
 ---
 

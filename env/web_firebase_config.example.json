@@ -1,0 +1,10 @@
+{
+    "$comment": "Web 版ビルド時の Firebase（GA4 計測）設定。Firebase コンソール > プロジェクトの設定 > マイアプリ > Web アプリの値を貼り付け、web_firebase_config.json として保存する（gitignore 済み）。ネイティブは google-services.json から初期化されるため不要。",
+    "INSIGHT_MATCH_WEB_API_KEY": "",
+    "INSIGHT_MATCH_WEB_APP_ID": "",
+    "INSIGHT_MATCH_WEB_MESSAGING_SENDER_ID": "",
+    "INSIGHT_MATCH_WEB_PROJECT_ID": "",
+    "INSIGHT_MATCH_WEB_AUTH_DOMAIN": "",
+    "INSIGHT_MATCH_WEB_STORAGE_BUCKET": "",
+    "INSIGHT_MATCH_WEB_MEASUREMENT_ID": ""
+}

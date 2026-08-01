@@ -19,25 +19,34 @@
 
 | 領域 | 採用 |
 |---|---|
-| アプリ | Flutter（Android 先行 / iOS は将来） |
+| アプリ | Flutter（Android 先行 / **Web は閲覧専用のお試し版** / iOS は需要を計測してから判断） |
 | 状態管理 | Riverpod |
 | ルーティング | go_router |
+| 認証 | Supabase Auth（メール＋パスワード / Google サインイン。OI-26 決定済み） |
 | バックエンド | Supabase（PostgreSQL / RLS / Edge Functions / Storage / Auth） |
 | バッチ | pg_cron → Edge Function |
-| 通知 | Firebase Cloud Messaging |
+| Web 配信・計測・通知 | Firebase（Hosting / Google Analytics / FCM のみ。Shift Navi とは別プロジェクト） |
 
 選定理由は [docs/adr/](docs/adr/) を参照。
+
+**お試し Web 版 → Android 誘導の導線**: Web 版は案件閲覧のみ可能で、応募などの
+アクション時にインストール導線を表示する（`app/lib/core/platform/platform_capability.dart`）。
+「Android アプリを入手」「iOS 版 (Coming Soon)」のタップ数は GA4 の
+`install_cta_android` / `ios_interest` イベントで計測し、iOS 版を作るかどうかの
+判断材料にする（[docs/manual_setup/gcp_firebase.md](docs/manual_setup/gcp_firebase.md) §4）。
 
 ## 3. リポジトリ構成
 
 ```
 .
 ├── AGENTS.md                  開発ルール（最重要）
-├── app/                       Flutter アプリ
+├── app/                       Flutter アプリ（Android / Web お試し版）
 │   ├── lib/
-│   │   ├── core/              設定・DI・エラー・ルーティング
+│   │   ├── core/              設定・DI・エラー・ルーティング・プラットフォーム判定
 │   │   ├── features/          機能単位（auth / sns_link / campaign / ...）
 │   │   └── shared/            共通ウィジェット・ユーティリティ
+│   ├── android/               Android プロジェクト（applicationId: app.insightmatch.android）
+│   ├── web/                   Web エントリポイント
 │   └── test/
 ├── supabase/
 │   ├── migrations/            DB マイグレーション（唯一の DB 変更手段）
@@ -45,12 +54,17 @@
 │   ├── tests/                 pgTAP による非開示要件の自動検証
 │   ├── seed.sql               ローカル用マスタデータ
 │   └── config.toml
+├── config/app_config.json     公開設定値（ストア URL・規約バージョン等）
+├── env/                       接続情報テンプレート（*.example.json をコピーして使う）
+├── firebase.json              Firebase Hosting（お試し Web 版）の設定
+├── .github/workflows/ci.yml   CI（flutter analyze・test / supabase test db）
 └── docs/
     ├── requirements/          要件定義書（全13章）
     ├── adr/                   アーキテクチャ決定記録
     ├── api/openapi.yaml       API 定義
     ├── backlog.md             実装タスク
     ├── open_issues.md         未決事項（OI-xx）
+    ├── manual_setup/          クラウド・ストア申請の手動作業ガイド
     └── glossary.md            用語集
 ```
 
@@ -72,11 +86,28 @@ supabase test db
 cd app
 flutter pub get
 
-# 5. 環境変数を設定して起動
-flutter run --dart-define-from-file=../env/local.json
+# 5. 環境変数を設定して起動（env/local.example.json をコピーして anon key を設定）
+flutter run --dart-define-from-file=../env/local.json           # Android など
+flutter run -d chrome --dart-define-from-file=../env/local.json  # Web お試し版
 ```
 
 詳細は [CONTRIBUTING.md](CONTRIBUTING.md) を参照。
+
+### お試し Web 版のデプロイ（Firebase Hosting）
+
+```bash
+cd app
+flutter build web \
+  --dart-define-from-file=../env/prod.json \
+  --dart-define-from-file=../env/web_firebase_config.json
+cd ..
+firebase deploy --only hosting
+```
+
+Firebase プロジェクトの作成・GA4 の確認方法は
+[docs/manual_setup/gcp_firebase.md](docs/manual_setup/gcp_firebase.md)、
+Supabase 本番と Google サインインの設定は
+[docs/manual_setup/supabase.md](docs/manual_setup/supabase.md) を参照。
 
 ## 5. 最初に読むもの
 

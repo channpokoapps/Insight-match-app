@@ -20,7 +20,8 @@ class CampaignListItem {
     this.thumbnailPath,
   });
 
-  factory CampaignListItem.fromJson(Map<String, dynamic> json) => CampaignListItem(
+  factory CampaignListItem.fromJson(Map<String, dynamic> json) =>
+      CampaignListItem(
         id: json['id'] as String,
         title: json['title'] as String,
         storeName: json['store_name'] as String,
@@ -80,7 +81,8 @@ class CampaignDetail {
         isEligible: json['is_eligible'] as bool? ?? false,
         detail: json['detail'] == null
             ? null
-            : CampaignDetailBody.fromJson(json['detail'] as Map<String, dynamic>),
+            : CampaignDetailBody.fromJson(
+                json['detail'] as Map<String, dynamic>),
       );
 
   final String id;
@@ -105,7 +107,8 @@ class CampaignDetailBody {
     this.nearestStationId,
   });
 
-  factory CampaignDetailBody.fromJson(Map<String, dynamic> json) => CampaignDetailBody(
+  factory CampaignDetailBody.fromJson(Map<String, dynamic> json) =>
+      CampaignDetailBody(
         rewardDescription: json['reward_description'] as String,
         requiredContent: json['required_content'] as String,
         postStartAt: DateTime.parse(json['post_start_at'] as String),

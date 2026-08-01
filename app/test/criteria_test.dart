@@ -1,5 +1,5 @@
-import 'package:app2/features/search/domain/criteria.dart';
-import 'package:app2/features/search/domain/masked_count.dart';
+import 'package:insight_match/features/search/domain/criteria.dart';
+import 'package:insight_match/features/search/domain/masked_count.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
