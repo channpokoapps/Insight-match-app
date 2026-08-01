@@ -1,0 +1,58 @@
+name: app2
+description: 店舗と投稿者をつなぐインフルエンサーマッチングアプリ
+publish_to: "none"
+version: 0.1.0+1
+
+environment:
+  sdk: ">=3.4.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # 状態管理
+  flutter_riverpod: ^2.5.1
+  riverpod_annotation: ^2.3.5
+
+  # ルーティング
+  go_router: ^14.2.0
+
+  # バックエンド
+  supabase_flutter: ^2.5.6
+
+  # モデル
+  freezed_annotation: ^2.4.4
+  json_annotation: ^4.9.0
+
+  # UI
+  fl_chart: ^0.68.0
+  cached_network_image: ^3.3.1
+  intl: ^0.19.0
+
+  # デバイス機能
+  geolocator: ^12.0.0
+  image_picker: ^1.1.2
+
+  # 通知
+  firebase_core: ^3.3.0
+  firebase_messaging: ^15.0.4
+
+  # ログ
+  logger: ^2.4.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+  build_runner: ^2.4.11
+  freezed: ^2.5.7
+  json_serializable: ^6.8.0
+  riverpod_generator: ^2.4.3
+  custom_lint: ^0.6.4
+  riverpod_lint: ^2.3.12
+  mocktail: ^1.0.4
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/

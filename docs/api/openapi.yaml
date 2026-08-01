@@ -1,0 +1,414 @@
+openapi: 3.1.0
+info:
+  title: インフルエンサーマッチング API
+  version: 0.1.0
+  description: |
+    Supabase PostgREST の RPC と Edge Functions のインターフェース定義。
+
+    ## 設計上の絶対条件
+    - どのレスポンススキーマにも **インサイト実数値を含めない**。
+      返せるのは boolean / 件数 / k-匿名性（k=5）を満たす集計値のみ。
+    - PR依頼者向けレスポンスに `creator_id` と投稿URLを含めない。案件内連番 `alias_no` のみ。
+    - このファイルにスキーマを追加するときは AGENTS.md の R-1〜R-10 を必ず確認する。
+
+servers:
+  - url: https://{projectRef}.supabase.co
+    variables:
+      projectRef:
+        default: your-project-ref
+
+security:
+  - bearerAuth: []
+
+paths:
+  /rest/v1/rpc/count_matching_creators:
+    post:
+      summary: 条件に一致する投稿者数を取得する（PR依頼者）
+      description: |
+        k=5 未満の場合 `count` は null、`masked` は true、`label` は「5人未満」を返す。
+        該当者が誰であるかは一切返さない。
+      operationId: countMatchingCreators
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [p_criteria]
+              properties:
+                p_criteria:
+                  $ref: '#/components/schemas/Criteria'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MaskedCount'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /rest/v1/rpc/list_campaigns_for_creator:
+    post:
+      summary: 応募可能な案件の一覧を取得する（投稿者）
+      operationId: listCampaignsForCreator
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                p_prefecture_id: { type: integer, nullable: true }
+                p_genre_id: { type: integer, nullable: true }
+                p_min_reward: { type: integer, nullable: true }
+                p_include_ineligible: { type: boolean, default: true }
+                p_limit: { type: integer, default: 20, maximum: 50 }
+                p_offset: { type: integer, default: 0 }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/CampaignListItem' }
+
+  /rest/v1/rpc/get_campaign_detail:
+    post:
+      summary: 案件詳細を取得する（投稿者）
+      description: |
+        応募条件を満たさない場合 `detail` は null。
+        モザイク表示のために「値を伏せて返す」のではなく、**値そのものを送らない**。
+      operationId: getCampaignDetail
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [p_campaign_id]
+              properties:
+                p_campaign_id: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CampaignDetail' }
+
+  /rest/v1/rpc/apply_to_campaign:
+    post:
+      summary: 案件に応募する（投稿者）
+      description: 条件充足はサーバ側で再検証する。不合格理由は返さない。
+      operationId: applyToCampaign
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [p_campaign_id]
+              properties:
+                p_campaign_id: { type: string, format: uuid }
+                p_message: { type: string, nullable: true, maxLength: 1000 }
+      responses:
+        '200':
+          description: 作成された応募ID
+          content:
+            application/json:
+              schema: { type: string, format: uuid }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /rest/v1/rpc/decide_application:
+    post:
+      summary: 応募の採否を決める（PR依頼者）
+      operationId: decideApplication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [p_application_id, p_decision]
+              properties:
+                p_application_id: { type: string, format: uuid }
+                p_decision: { type: string, enum: [matched, rejected] }
+      responses:
+        '204': { description: OK }
+
+  /rest/v1/rpc/estimate_relaxation:
+    post:
+      summary: 条件緩和による増加人数を試算する（PR依頼者）
+      operationId: estimateRelaxation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [p_campaign_id, p_new_criteria]
+              properties:
+                p_campaign_id: { type: string, format: uuid }
+                p_new_criteria: { $ref: '#/components/schemas/Criteria' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  current: { $ref: '#/components/schemas/MaskedCount' }
+                  relaxed: { $ref: '#/components/schemas/MaskedCount' }
+                  additional: { $ref: '#/components/schemas/MaskedCount' }
+
+  /rest/v1/rpc/get_campaign_report:
+    post:
+      summary: 成果レポートを取得する（PR依頼者）
+      description: 参加者が 5 人未満の場合 `available` は false。集計値は一切返さない。
+      operationId: getCampaignReport
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [p_campaign_id]
+              properties:
+                p_campaign_id: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ReportUnavailable'
+                  - $ref: '#/components/schemas/Report'
+
+  /rest/v1/rpc/get_my_sns_status:
+    post:
+      summary: 自分のSNS連携状態を取得する（投稿者）
+      description: 実数値は本人にも返さない。連携状態と最終同期日時のみ。
+      operationId: getMySnsStatus
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    platform: { type: string, enum: [instagram, tiktok, youtube] }
+                    status: { type: string, enum: [active, reauth_required, revoked] }
+                    last_synced_at: { type: string, format: date-time, nullable: true }
+                    is_ready: { type: boolean }
+
+  /rest/v1/v_applications_for_client:
+    get:
+      summary: 自案件の応募者一覧（PR依頼者）
+      description: creator_id・投稿URLを含まない。表示は案件内連番のみ。
+      operationId: listApplicationsForClient
+      parameters:
+        - in: query
+          name: campaign_id
+          schema: { type: string }
+          example: eq.00000000-0000-0000-0000-000000000000
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ApplicationForClient' }
+
+  /functions/v1/sync-insights:
+    post:
+      summary: 日次インサイト同期のディスパッチ（内部用）
+      description: pg_cron からのみ呼び出す。service_role キーが必要。
+      operationId: syncInsights
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                trigger: { type: string, enum: [daily, retry, manual] }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  job_id: { type: string, format: uuid }
+                  target_count: { type: integer }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  responses:
+    BadRequest:
+      description: 入力が不正、または操作が許可されていない状態
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Unauthorized:
+      description: 未認証、または権限がない
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        message: { type: string, description: 利用者に表示できる文言のみ。内部状態を漏らさない }
+        code: { type: string }
+
+    Criteria:
+      description: |
+        条件式。ネストは最大3段、子要素は最大20件。
+        指標・属性・比較演算子はサーバ側のホワイトリストで検証される。
+      oneOf:
+        - $ref: '#/components/schemas/CriteriaGroup'
+        - $ref: '#/components/schemas/CriteriaMetricLeaf'
+        - $ref: '#/components/schemas/CriteriaAttrLeaf'
+
+    CriteriaGroup:
+      type: object
+      required: [op, children]
+      properties:
+        op: { type: string, enum: [AND, OR] }
+        children:
+          type: array
+          maxItems: 20
+          items: { $ref: '#/components/schemas/Criteria' }
+
+    CriteriaMetricLeaf:
+      type: object
+      required: [metric, platform, window, cmp, value]
+      properties:
+        metric:
+          type: string
+          enum: [followers, avg_reach, avg_impressions, avg_likes, avg_comments,
+                 avg_saves, avg_shares, avg_views, engagement_rate, post_count]
+        platform: { type: string, enum: [instagram, tiktok, youtube] }
+        window: { type: integer, enum: [7, 30, 90] }
+        cmp: { type: string, enum: ['>=', '<=', '>', '<', '='] }
+        value: { type: number }
+
+    CriteriaAttrLeaf:
+      type: object
+      required: [attr, cmp, value]
+      properties:
+        attr: { type: string, enum: [prefecture_id, age, genre_id] }
+        cmp: { type: string, enum: ['>=', '<=', '>', '<', '=', contains] }
+        value: { type: number }
+
+    MaskedCount:
+      type: object
+      properties:
+        count:
+          type: integer
+          nullable: true
+          description: k-匿名性を満たさない場合は null
+        masked: { type: boolean }
+        label: { type: string, example: 5人未満 }
+
+    CampaignListItem:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        store_name: { type: string }
+        genre_id: { type: integer, nullable: true }
+        reward_description: { type: string }
+        reward_value_jpy: { type: integer }
+        prefecture_id: { type: integer, nullable: true }
+        city_id: { type: integer, nullable: true }
+        apply_end_at: { type: string, format: date-time }
+        post_start_at: { type: string, format: date-time }
+        post_end_at: { type: string, format: date-time }
+        thumbnail_path: { type: string, nullable: true }
+        is_eligible: { type: boolean, description: false のときはモザイク表示にする }
+        has_applied: { type: boolean }
+
+    CampaignDetail:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        store_name: { type: string }
+        genre_id: { type: integer, nullable: true }
+        reward_value_jpy: { type: integer }
+        prefecture_id: { type: integer, nullable: true }
+        apply_end_at: { type: string, format: date-time }
+        is_eligible: { type: boolean }
+        detail:
+          nullable: true
+          type: object
+          description: 条件を満たす場合のみ含まれる
+          properties:
+            reward_description: { type: string }
+            required_content: { type: string }
+            city_id: { type: integer, nullable: true }
+            latitude: { type: number, nullable: true }
+            longitude: { type: number, nullable: true }
+            nearest_station_id: { type: integer, nullable: true }
+            post_start_at: { type: string, format: date-time }
+            post_end_at: { type: string, format: date-time }
+            hashtags: { type: array, items: { type: string } }
+            images: { type: array, items: { type: string } }
+
+    ApplicationForClient:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        campaign_id: { type: string, format: uuid }
+        alias_no: { type: integer, description: 案件内連番。投稿者A/B/C の表示に使う }
+        status: { type: string }
+        message: { type: string, nullable: true }
+        matched_at: { type: string, format: date-time, nullable: true }
+        created_at: { type: string, format: date-time }
+        has_submission: { type: boolean }
+        is_post_verified: { type: boolean }
+
+    ReportUnavailable:
+      type: object
+      properties:
+        available: { type: boolean, enum: [false] }
+        reason: { type: string, enum: [k_anonymity] }
+        message: { type: string }
+
+    Report:
+      type: object
+      properties:
+        available: { type: boolean, enum: [true] }
+        participant_count: { type: integer, minimum: 5 }
+        metrics:
+          type: object
+          additionalProperties:
+            type: object
+            properties:
+              median: { type: number, nullable: true }
+              total: { type: number, nullable: true }
+              histogram:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    from: { type: number }
+                    to: { type: number }
+                    count: { type: integer, minimum: 5 }
