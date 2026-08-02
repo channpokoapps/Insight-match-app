@@ -28,12 +28,14 @@ select ok(not has_table_privilege('anon', 'private.creator_metrics', 'SELECT'),
           'anon は creator_metrics を SELECT できない');
 
 -- private のテーブルがひとつも公開ロールに漏れていないことを網羅的に確認
+-- （has_table_privilege は WHERE の評価順序によっては private 以外の行にも
+--   適用されうるため、スキーマ名もタプルから組み立てて存在しない名前を引かない）
 select is(
   (select count(*)::int
    from pg_tables t
    where t.schemaname = 'private'
-     and (has_table_privilege('authenticated', format('private.%I', t.tablename), 'SELECT')
-       or has_table_privilege('anon',          format('private.%I', t.tablename), 'SELECT'))),
+     and (has_table_privilege('authenticated', format('%I.%I', t.schemaname, t.tablename), 'SELECT')
+       or has_table_privilege('anon',          format('%I.%I', t.schemaname, t.tablename), 'SELECT'))),
   0,
   'private の全テーブルが anon / authenticated から不可視である'
 );
