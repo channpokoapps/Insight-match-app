@@ -6,12 +6,14 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/platform/platform_capability.dart';
 import '../../../core/router/app_router.dart';
+import '../../../core/theme/app_theme.dart';
+import '../../../shared/widgets/app_bottom_nav.dart';
 import '../../../shared/widgets/install_prompt.dart';
 import '../../auth/data/auth_repository.dart';
 import '../../auth/data/profile_repository.dart';
 import '../../auth/domain/app_role.dart';
 
-/// 設定画面。
+/// マイページ（設定）画面。
 ///
 /// アカウント情報・規約リンク・ログアウトに加え、Web 版では
 /// アプリのインストール導線を常設する（お試し版からの転換点）。
@@ -78,81 +80,210 @@ class SettingsPage extends ConsumerWidget {
     final PlatformCapability capability = ref.watch(platformCapabilityProvider);
     final UserProfile? profile = ref.watch(myProfileProvider).valueOrNull;
     return Scaffold(
-      appBar: AppBar(title: const Text('設定')),
+      appBar: AppBar(title: const Text('マイページ')),
+      bottomNavigationBar: const AppBottomNav(current: AppRoutes.settings),
       body: ListView(
+        padding: const EdgeInsets.all(16),
         children: <Widget>[
-          if (profile != null)
-            ListTile(
-              leading: const Icon(Icons.person_outline),
-              title: Text(profile.role.label),
-              subtitle: Text('アカウント状態: ${profile.status.label}'),
-            ),
-          if (profile?.role == AppRole.creator)
-            ListTile(
-              leading: const Icon(Icons.link),
-              title: const Text('SNS 連携'),
-              subtitle: const Text('Instagram アカウントの連携・状態確認'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => context.push(AppRoutes.snsLink),
-            ),
-          if (capability.isWeb) ...<Widget>[
-            const Divider(),
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: <Widget>[
-                  Text(
-                    'アプリをダウンロード',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    capability.webTrialNotice(),
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                  const SizedBox(height: 12),
-                  const AppInstallButtons(),
-                ],
+          if (profile != null) ...<Widget>[
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: <Widget>[
+                    Container(
+                      width: 52,
+                      height: 52,
+                      decoration: const BoxDecoration(
+                        gradient: AppTheme.brandGradient,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        profile.role == AppRole.client
+                            ? Icons.storefront_outlined
+                            : Icons.photo_camera_outlined,
+                        color: Colors.white,
+                        size: 26,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Text(
+                            profile.role.label,
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleMedium
+                                ?.copyWith(fontWeight: FontWeight.w700),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'アカウント状態: ${profile.status.label}',
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodySmall
+                                ?.copyWith(color: Colors.grey.shade600),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
+            const SizedBox(height: 16),
           ],
-          const Divider(),
-          ListTile(
-            leading: const Icon(Icons.description_outlined),
-            title: const Text('利用規約'),
-            onTap: () => _openUrl(context, config.termsUrl),
-          ),
-          ListTile(
-            leading: const Icon(Icons.privacy_tip_outlined),
-            title: const Text('プライバシーポリシー'),
-            onTap: () => _openUrl(context, config.privacyUrl),
-          ),
-          ListTile(
-            leading: const Icon(Icons.mail_outline),
-            title: const Text('お問い合わせ'),
-            subtitle: Text(config.supportEmail),
-            onTap: () => _openUrl(context, 'mailto:${config.supportEmail}'),
-          ),
-          const Divider(),
-          ListTile(
-            leading: const Icon(Icons.logout),
-            title: const Text('ログアウト'),
-            onTap: () => _confirmSignOut(context, ref),
-          ),
-          ListTile(
-            leading: Icon(
-              Icons.person_off_outlined,
-              color: Theme.of(context).colorScheme.error,
+          if (profile?.role == AppRole.creator) ...<Widget>[
+            _SectionCard(
+              children: <Widget>[
+                _MenuTile(
+                  icon: Icons.link,
+                  title: 'SNS 連携',
+                  subtitle: 'Instagram アカウントの連携・状態確認',
+                  onTap: () => context.go(AppRoutes.snsLink),
+                ),
+              ],
             ),
-            title: Text(
-              '退会',
-              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            const SizedBox(height: 16),
+          ],
+          if (capability.isWeb) ...<Widget>[
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+                    Text(
+                      'アプリをダウンロード',
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleMedium
+                          ?.copyWith(fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      capability.webTrialNotice(),
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodySmall
+                          ?.copyWith(height: 1.5),
+                    ),
+                    const SizedBox(height: 12),
+                    const AppInstallButtons(),
+                  ],
+                ),
+              ),
             ),
-            onTap: () => _showWithdrawDialog(context, config),
+            const SizedBox(height: 16),
+          ],
+          _SectionCard(
+            children: <Widget>[
+              _MenuTile(
+                icon: Icons.description_outlined,
+                title: '利用規約',
+                onTap: () => _openUrl(context, config.termsUrl),
+              ),
+              _MenuTile(
+                icon: Icons.privacy_tip_outlined,
+                title: 'プライバシーポリシー',
+                onTap: () => _openUrl(context, config.privacyUrl),
+              ),
+              _MenuTile(
+                icon: Icons.mail_outline,
+                title: 'お問い合わせ',
+                subtitle: config.supportEmail,
+                onTap: () => _openUrl(context, 'mailto:${config.supportEmail}'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          _SectionCard(
+            children: <Widget>[
+              _MenuTile(
+                icon: Icons.logout,
+                title: 'ログアウト',
+                showChevron: false,
+                onTap: () => _confirmSignOut(context, ref),
+              ),
+              _MenuTile(
+                icon: Icons.person_off_outlined,
+                title: '退会',
+                color: Theme.of(context).colorScheme.error,
+                showChevron: false,
+                onTap: () => _showWithdrawDialog(context, config),
+              ),
+            ],
           ),
         ],
       ),
+    );
+  }
+}
+
+/// メニュー項目をまとめる角丸カード。LINE の設定画面のグルーピングに寄せる。
+class _SectionCard extends StatelessWidget {
+  const _SectionCard({required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: <Widget>[
+          for (int i = 0; i < children.length; i++) ...<Widget>[
+            if (i > 0)
+              Divider(height: 1, indent: 56, color: Colors.grey.shade100),
+            children[i],
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _MenuTile extends StatelessWidget {
+  const _MenuTile({
+    required this.icon,
+    required this.title,
+    required this.onTap,
+    this.subtitle,
+    this.color,
+    this.showChevron = true,
+  });
+
+  final IconData icon;
+  final String title;
+  final String? subtitle;
+  final VoidCallback onTap;
+  final Color? color;
+  final bool showChevron;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      leading: Icon(icon, color: color ?? Colors.grey.shade700),
+      title: Text(
+        title,
+        style: TextStyle(
+          fontSize: 15,
+          fontWeight: FontWeight.w600,
+          color: color ?? Colors.black87,
+        ),
+      ),
+      subtitle: subtitle == null
+          ? null
+          : Text(
+              subtitle!,
+              style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+            ),
+      trailing: showChevron
+          ? const Icon(Icons.chevron_right, color: Colors.grey)
+          : null,
+      onTap: onTap,
     );
   }
 }

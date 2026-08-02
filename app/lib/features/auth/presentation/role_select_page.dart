@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/error/app_failure.dart';
+import '../../../core/theme/app_theme.dart';
+import '../../../shared/widgets/error_notice.dart';
 import '../data/auth_repository.dart';
 import '../data/profile_repository.dart';
 import '../domain/app_role.dart';
@@ -64,18 +66,33 @@ class _RoleSelectPageState extends ConsumerState<RoleSelectPage> {
                 children: <Widget>[
                   Text(
                     'どちらの立場で利用しますか？',
-                    style: Theme.of(context).textTheme.titleLarge,
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleLarge
+                        ?.copyWith(fontWeight: FontWeight.w700),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 8),
                   Text(
                     '選択した役割は後から変更できません。',
-                    style: Theme.of(context).textTheme.bodySmall,
+                    style: Theme.of(context)
+                        .textTheme
+                        .bodySmall
+                        ?.copyWith(color: Colors.grey.shade600),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 24),
                   _RoleCard(
-                    icon: Icons.photo_camera_outlined,
+                    leading: Container(
+                      width: 52,
+                      height: 52,
+                      decoration: const BoxDecoration(
+                        gradient: AppTheme.brandGradient,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.photo_camera_outlined,
+                          color: Colors.white, size: 26),
+                    ),
                     title: AppRole.creator.label,
                     description: 'SNS で投稿する側。Instagram を連携して、'
                         '条件に合う案件に応募します。インサイトの数値は'
@@ -84,7 +101,16 @@ class _RoleSelectPageState extends ConsumerState<RoleSelectPage> {
                   ),
                   const SizedBox(height: 16),
                   _RoleCard(
-                    icon: Icons.storefront_outlined,
+                    leading: Container(
+                      width: 52,
+                      height: 52,
+                      decoration: BoxDecoration(
+                        color: AppTheme.successGreen.withValues(alpha: 0.12),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.storefront_outlined,
+                          color: AppTheme.successGreen, size: 26),
+                    ),
                     title: AppRole.client.label,
                     description: '店舗・企業として PR を依頼する側。'
                         '案件を作成し、インサイト条件で投稿者を募集します。',
@@ -92,12 +118,7 @@ class _RoleSelectPageState extends ConsumerState<RoleSelectPage> {
                   ),
                   if (_error != null) ...<Widget>[
                     const SizedBox(height: 16),
-                    Text(
-                      _error!,
-                      style:
-                          TextStyle(color: Theme.of(context).colorScheme.error),
-                      textAlign: TextAlign.center,
-                    ),
+                    ErrorNotice(message: _error!),
                   ],
                 ],
               ),
@@ -111,13 +132,13 @@ class _RoleSelectPageState extends ConsumerState<RoleSelectPage> {
 
 class _RoleCard extends StatelessWidget {
   const _RoleCard({
-    required this.icon,
+    required this.leading,
     required this.title,
     required this.description,
     required this.onTap,
   });
 
-  final IconData icon;
+  final Widget leading;
   final String title;
   final String description;
   final VoidCallback? onTap;
@@ -127,25 +148,36 @@ class _RoleCard extends StatelessWidget {
     return Card(
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         child: Padding(
           padding: const EdgeInsets.all(20),
           child: Row(
             children: <Widget>[
-              Icon(icon, size: 40),
+              leading,
               const SizedBox(width: 16),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    Text(title, style: Theme.of(context).textTheme.titleMedium),
+                    Text(
+                      title,
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleMedium
+                          ?.copyWith(fontWeight: FontWeight.w700),
+                    ),
                     const SizedBox(height: 4),
-                    Text(description,
-                        style: Theme.of(context).textTheme.bodySmall),
+                    Text(
+                      description,
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodySmall
+                          ?.copyWith(height: 1.5, color: Colors.grey.shade700),
+                    ),
                   ],
                 ),
               ),
-              const Icon(Icons.chevron_right),
+              const Icon(Icons.chevron_right, color: Colors.grey),
             ],
           ),
         ),

@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/error/app_failure.dart';
 import '../../../core/router/app_router.dart';
+import '../../../core/theme/app_theme.dart';
+import '../../../shared/widgets/error_notice.dart';
 import '../data/auth_repository.dart';
 
 /// ログイン画面。
@@ -20,6 +22,7 @@ class _SignInPageState extends ConsumerState<SignInPage> {
   final TextEditingController _email = TextEditingController();
   final TextEditingController _password = TextEditingController();
   bool _submitting = false;
+  bool _showPassword = false;
   String? _error;
 
   @override
@@ -68,15 +71,23 @@ class _SignInPageState extends ConsumerState<SignInPage> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: <Widget>[
+                  const Center(child: BrandMark()),
+                  const SizedBox(height: 16),
                   Text(
                     'SNS Insight Matcher',
-                    style: Theme.of(context).textTheme.headlineMedium,
+                    style: Theme.of(context)
+                        .textTheme
+                        .headlineSmall
+                        ?.copyWith(fontWeight: FontWeight.w700),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 8),
                   Text(
                     'インサイトで選ぶ、数値は見せないマッチング',
-                    style: Theme.of(context).textTheme.bodySmall,
+                    style: Theme.of(context)
+                        .textTheme
+                        .bodySmall
+                        ?.copyWith(color: Colors.grey.shade600),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 32),
@@ -84,36 +95,65 @@ class _SignInPageState extends ConsumerState<SignInPage> {
                     controller: _email,
                     keyboardType: TextInputType.emailAddress,
                     autofillHints: const <String>[AutofillHints.email],
-                    decoration: const InputDecoration(labelText: 'メールアドレス'),
+                    decoration: const InputDecoration(
+                      labelText: 'メールアドレス',
+                      prefixIcon: Icon(Icons.mail_outline),
+                    ),
                   ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: _password,
-                    obscureText: true,
+                    obscureText: !_showPassword,
                     autofillHints: const <String>[AutofillHints.password],
-                    decoration: const InputDecoration(labelText: 'パスワード'),
+                    decoration: InputDecoration(
+                      labelText: 'パスワード',
+                      prefixIcon: const Icon(Icons.lock_outline),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _showPassword
+                              ? Icons.visibility_off_outlined
+                              : Icons.visibility_outlined,
+                        ),
+                        tooltip: _showPassword ? 'パスワードを隠す' : 'パスワードを表示',
+                        onPressed: () =>
+                            setState(() => _showPassword = !_showPassword),
+                      ),
+                    ),
                     onSubmitted: (_) => _submitting ? null : _signIn(),
                   ),
                   if (_error != null) ...<Widget>[
                     const SizedBox(height: 12),
-                    Text(
-                      _error!,
-                      style:
-                          TextStyle(color: Theme.of(context).colorScheme.error),
-                    ),
+                    ErrorNotice(message: _error!),
                   ],
                   const SizedBox(height: 24),
                   FilledButton(
                     onPressed: _submitting ? null : _signIn,
                     child: _submitting
                         ? const SizedBox(
-                            height: 18,
-                            width: 18,
+                            height: 20,
+                            width: 20,
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         : const Text('ログイン'),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: <Widget>[
+                      const Expanded(child: Divider()),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        child: Text(
+                          'または',
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodySmall
+                              ?.copyWith(color: Colors.grey.shade500),
+                        ),
+                      ),
+                      const Expanded(child: Divider()),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
                   OutlinedButton.icon(
                     icon: const Icon(Icons.g_mobiledata, size: 28),
                     label: const Text('Google で続行'),
