@@ -6,12 +6,33 @@
 //   - 数値をログに出さない（R-7）
 //   - 失敗は指数バックオフで最大5回まで再試行する（ADR-0004）
 
-import { createServiceClient, assertServiceRole, safeLog } from "../_shared/client.ts";
-import { decryptToken } from "../_shared/crypto.ts";
+import { assertServiceRole, createServiceClient, safeLog } from "../_shared/client.ts";
+import { decryptToken, encryptToken } from "../_shared/crypto.ts";
+import {
+  aggregateWindows,
+  type MediaMetrics,
+  parseDemographics,
+  parseInsightValues,
+  toRatios,
+} from "../_shared/insights.ts";
 
 const MAX_ATTEMPT = 5;
 const BACKOFF_MINUTES = [5, 15, 45, 120, 360];
-const WINDOWS = [7, 30, 90] as const;
+
+const GRAPH = "https://graph.facebook.com/v21.0";
+
+/** 取得対象の投稿期間。最長の集計ウィンドウ（90日）に合わせる。 */
+const MEDIA_WINDOW_DAYS = 90;
+
+/** メディア一覧の最大ページ数（1ページ50件）。暴走とレート消費の上限。 */
+const MAX_MEDIA_PAGES = 5;
+
+/** 個別インサイトを取得する最大メディア数。
+ *  レート制限（約200リクエスト/ユーザー/時）内に収める（要件 9-4-1）。 */
+const MAX_INSIGHT_MEDIA = 60;
+
+/** トークンの残り有効期間がこの日数を切ったら更新する（T-016 / FR-SNS-07）。 */
+const TOKEN_REFRESH_BEFORE_DAYS = 10;
 
 interface Payload {
   job_id: string;
@@ -94,11 +115,12 @@ async function syncOne(db: any, credentialId: string): Promise<void> {
     return;
   }
 
-  const token = await decryptToken(cred.access_token_encrypted);
+  let token = await decryptToken(cred.access_token_encrypted);
+  token = await maybeRefreshToken(db, cred, token);
 
-  // --- 投稿一覧とインサイトの取得 --------------------------------------
-  // TODO(OI-37): 取得する指標名は Meta の最新仕様で最終確認する。
-  const media = await fetchInstagramMedia(cred.external_account_id, token);
+  // --- 投稿一覧と個別インサイトの取得（要件 9-4-3） ------------------------
+  const media = await fetchAllMedia(cred.external_account_id, token);
+  await attachMediaInsights(media, token);
   const followers = await fetchInstagramFollowers(cred.external_account_id, token);
 
   if (media.length > 0) {
@@ -123,49 +145,32 @@ async function syncOne(db: any, credentialId: string): Promise<void> {
     if (upsertError) throw upsertError;
   }
 
-  // --- 集計 ------------------------------------------------------------
-  const now = Date.now();
-  for (const windowDays of WINDOWS) {
-    const from = now - windowDays * 86_400_000;
-    const target = media.filter((m) => new Date(m.timestamp).getTime() >= from);
-    const avg = (pick: (m: InstagramMedia) => number | null | undefined) => {
-      const values = target.map(pick).filter((v): v is number => typeof v === "number");
-      return values.length === 0 ? null : values.reduce((a, b) => a + b, 0) / values.length;
-    };
-
-    const avgReach = avg((m) => m.reach);
-    const avgLikes = avg((m) => m.like_count);
-    const avgComments = avg((m) => m.comments_count);
-    const avgSaves = avg((m) => m.saved);
-    const avgShares = avg((m) => m.shares);
-
-    // エンゲージメント率 = (いいね + コメント + 保存 + シェア) / リーチ
-    const engagement =
-      avgReach && avgReach > 0
-        ? ((avgLikes ?? 0) + (avgComments ?? 0) + (avgSaves ?? 0) + (avgShares ?? 0)) / avgReach
-        : null;
-
+  // --- 集計（_shared/insights.ts の純粋関数） -----------------------------
+  for (const w of aggregateWindows(media, Date.now())) {
     const { error: metricError } = await db.from("creator_metrics").upsert(
       {
         user_id: cred.user_id,
         platform: "instagram",
-        window_days: windowDays,
+        window_days: w.window_days,
         followers,
-        avg_reach: avgReach,
-        avg_impressions: avg((m) => m.impressions),
-        avg_likes: avgLikes,
-        avg_comments: avgComments,
-        avg_saves: avgSaves,
-        avg_shares: avgShares,
-        avg_views: avg((m) => m.views),
-        engagement_rate: engagement,
-        post_count: target.length,
+        avg_reach: w.avg_reach,
+        avg_impressions: w.avg_impressions,
+        avg_likes: w.avg_likes,
+        avg_comments: w.avg_comments,
+        avg_saves: w.avg_saves,
+        avg_shares: w.avg_shares,
+        avg_views: w.avg_views,
+        engagement_rate: w.engagement_rate,
+        post_count: w.post_count,
         computed_at: new Date().toISOString(),
       },
       { onConflict: "user_id,platform,window_days" },
     );
     if (metricError) throw metricError;
   }
+
+  // --- オーディエンス属性（T-021。取得のみ、条件には使わない = OI-35） ----
+  await syncDemographics(db, cred, token);
 
   // public 側には「同期できた」という事実だけを書く
   const publicDb = db.schema("public");
@@ -174,6 +179,53 @@ async function syncOne(db: any, credentialId: string): Promise<void> {
     .update({ last_synced_at: new Date().toISOString(), status: "active" })
     .eq("user_id", cred.user_id)
     .eq("platform", "instagram");
+}
+
+/**
+ * 長期トークンの残り有効期間が短いときに再交換して延長する（T-016）。
+ *
+ * META_APP_ID / META_APP_SECRET が未設定の間はスキップする。
+ * 交換が認可エラーで失敗した場合は再認可が必要。
+ */
+// deno-lint-ignore no-explicit-any
+async function maybeRefreshToken(db: any, cred: any, token: string): Promise<string> {
+  const expiresAt = cred.token_expires_at ? new Date(cred.token_expires_at).getTime() : null;
+  if (
+    expiresAt === null ||
+    expiresAt - Date.now() > TOKEN_REFRESH_BEFORE_DAYS * 86_400_000
+  ) {
+    return token;
+  }
+  const appId = Deno.env.get("META_APP_ID");
+  const appSecret = Deno.env.get("META_APP_SECRET");
+  if (!appId || !appSecret) return token;
+
+  const res = await fetch(
+    `${GRAPH}/oauth/access_token?grant_type=fb_exchange_token` +
+      `&client_id=${encodeURIComponent(appId)}` +
+      `&client_secret=${encodeURIComponent(appSecret)}` +
+      `&fb_exchange_token=${encodeURIComponent(token)}`,
+  );
+  if (res.status === 401 || res.status === 403 || res.status === 400) {
+    // 失効済みトークンの交換失敗は再認可でしか回復できない
+    throw new Error("AUTH_REVOKED");
+  }
+  if (!res.ok) return token; // 一時障害なら現行トークンで続行
+  const body = await res.json();
+  if (typeof body.access_token !== "string") return token;
+
+  const newExpiresAt = typeof body.expires_in === "number"
+    ? new Date(Date.now() + body.expires_in * 1000).toISOString()
+    : new Date(Date.now() + 60 * 86_400_000).toISOString();
+  await db
+    .from("social_credentials")
+    .update({
+      access_token_encrypted: await encryptToken(body.access_token),
+      token_expires_at: newExpiresAt,
+    })
+    .eq("id", cred.id);
+  safeLog("token_refreshed", { credential_id: cred.id, platform: "instagram" });
+  return body.access_token;
 }
 
 // deno-lint-ignore no-explicit-any
@@ -192,44 +244,120 @@ async function markReauthRequired(db: any, credentialId: string): Promise<void> 
     .eq("platform", data.platform);
 }
 
-interface InstagramMedia {
-  id: string;
-  media_type?: string;
-  permalink?: string;
-  timestamp: string;
-  like_count?: number;
-  comments_count?: number;
-  reach?: number;
-  impressions?: number;
-  saved?: number;
-  shares?: number;
-  views?: number;
+/** メディア一覧をページネーションで取得する。集計対象期間より古い投稿で打ち切る。 */
+async function fetchAllMedia(accountId: string, token: string): Promise<MediaMetrics[]> {
+  const fields = "id,media_type,permalink,timestamp,like_count,comments_count";
+  const oldest = Date.now() - MEDIA_WINDOW_DAYS * 86_400_000;
+  const out: MediaMetrics[] = [];
+
+  let url: string | null = `${GRAPH}/${encodeURIComponent(accountId)}/media` +
+    `?fields=${fields}&limit=50&access_token=${encodeURIComponent(token)}`;
+
+  for (let page = 0; page < MAX_MEDIA_PAGES && url; page++) {
+    const res: Response = await fetch(url);
+    if (res.status === 401 || res.status === 403) throw new Error("AUTH_REVOKED");
+    if (res.status === 429) throw new Error("RATE_LIMIT");
+    if (!res.ok) throw new Error("API_ERROR");
+    const body: { data?: MediaMetrics[]; paging?: { next?: string } } = await res.json();
+    const items = body.data ?? [];
+
+    let reachedEnd = false;
+    for (const m of items) {
+      if (new Date(m.timestamp).getTime() < oldest) {
+        reachedEnd = true;
+        break;
+      }
+      out.push(m);
+    }
+    if (reachedEnd) break;
+    url = body.paging?.next ?? null;
+  }
+  return out;
 }
 
-async function fetchInstagramMedia(accountId: string, token: string): Promise<InstagramMedia[]> {
-  // TODO: ページネーション・インサイトの個別取得を実装する。
-  // ここでは呼び出し形だけを定義しておく。
-  const fields = "id,media_type,permalink,timestamp,like_count,comments_count";
-  const url =
-    `https://graph.facebook.com/v21.0/${encodeURIComponent(accountId)}/media` +
-    `?fields=${fields}&limit=50&access_token=${encodeURIComponent(token)}`;
-  const res = await fetch(url);
-  if (res.status === 401 || res.status === 403) throw new Error("AUTH_REVOKED");
-  if (res.status === 429) throw new Error("RATE_LIMIT");
-  if (!res.ok) throw new Error("API_ERROR");
-  const body = await res.json();
-  return (body.data ?? []) as InstagramMedia[];
+/**
+ * メディアごとのインサイト（リーチ・保存など）を取得して書き込む。
+ *
+ * TODO(OI-37): 取得可能な指標は Meta の仕様変更で変わりうる。
+ * impressions は新規投稿では廃止済みのため views を主とし、
+ * 未対応メディアは縮退したメトリクスで再試行 → それでも失敗なら
+ * 一覧で取れた いいね/コメント のみで集計する（NULL は平均から除外）。
+ */
+async function attachMediaInsights(media: MediaMetrics[], token: string): Promise<void> {
+  const targets = media.slice(0, MAX_INSIGHT_MEDIA);
+  for (const m of targets) {
+    const values = await fetchMediaInsights(m.id, token);
+    if (values === null) continue;
+    m.reach = values.reach ?? null;
+    m.saved = values.saved ?? null;
+    m.shares = values.shares ?? null;
+    m.views = values.views ?? null;
+    // impressions は取得できた場合のみ（旧投稿の互換）
+    m.impressions = values.impressions ?? null;
+  }
+}
+
+/** 1メディア分のインサイトを取得する。未対応・取得不可は null。 */
+async function fetchMediaInsights(
+  mediaId: string,
+  token: string,
+): Promise<Record<string, number> | null> {
+  for (const metrics of ["reach,saved,shares,views", "reach,saved"]) {
+    const res = await fetch(
+      `${GRAPH}/${encodeURIComponent(mediaId)}/insights` +
+        `?metric=${metrics}&access_token=${encodeURIComponent(token)}`,
+    );
+    if (res.status === 401 || res.status === 403) throw new Error("AUTH_REVOKED");
+    if (res.status === 429) throw new Error("RATE_LIMIT");
+    if (res.ok) return parseInsightValues(await res.json());
+    // 400 はメディア種別が指標に未対応の場合があるため、縮退して再試行する
+    if (res.status !== 400) return null;
+  }
+  return null;
 }
 
 async function fetchInstagramFollowers(accountId: string, token: string): Promise<number | null> {
-  const url =
-    `https://graph.facebook.com/v21.0/${encodeURIComponent(accountId)}` +
+  const url = `${GRAPH}/${encodeURIComponent(accountId)}` +
     `?fields=followers_count&access_token=${encodeURIComponent(token)}`;
   const res = await fetch(url);
   if (res.status === 401 || res.status === 403) throw new Error("AUTH_REVOKED");
   if (!res.ok) return null;
   const body = await res.json();
   return typeof body.followers_count === "number" ? body.followers_count : null;
+}
+
+/**
+ * フォロワーのオーディエンス属性を取得して保存する（T-021）。
+ *
+ * 条件式には使わない（OI-35）。取得失敗は同期全体を失敗させない。
+ */
+// deno-lint-ignore no-explicit-any
+async function syncDemographics(db: any, cred: any, token: string): Promise<void> {
+  for (const dimension of ["age", "gender", "city"] as const) {
+    try {
+      const res = await fetch(
+        `${GRAPH}/${encodeURIComponent(cred.external_account_id)}/insights` +
+          `?metric=follower_demographics&period=lifetime&metric_type=total_value` +
+          `&breakdown=${dimension}&access_token=${encodeURIComponent(token)}`,
+      );
+      if (!res.ok) continue; // フォロワー100人未満などで取得不可の場合がある
+      const ratios = toRatios(parseDemographics(await res.json()));
+      if (ratios.length === 0) continue;
+      const rows = ratios.map((r) => ({
+        user_id: cred.user_id,
+        platform: "instagram",
+        dimension,
+        bucket: r.bucket,
+        ratio: r.ratio,
+        computed_at: new Date().toISOString(),
+      }));
+      await db
+        .from("audience_demographics")
+        .upsert(rows, { onConflict: "user_id,platform,dimension,bucket" });
+    } catch {
+      // 属性は補助情報。失敗しても同期は続行する
+    }
+  }
 }
 
 function classifyError(e: unknown): string {

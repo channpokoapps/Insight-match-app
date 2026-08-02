@@ -75,10 +75,30 @@ GCP コンソール（**Firebase プロジェクトと同じ GCP プロジェク
 ## 5. Edge Functions（Phase 3 以降）
 
 ```bash
+supabase functions deploy meta-oauth
 supabase functions deploy sync-insights
 supabase functions deploy sync-worker
-supabase secrets set META_APP_ID=... META_APP_SECRET=... TOKEN_ENC_KEY=...
+supabase secrets set META_APP_ID=... META_APP_SECRET=...
+# TOKEN_ENCRYPTION_KEY は初期構築時に設定済み（ADR-0006）
 ```
+
+### 5.1 日次バッチ（pg_cron）の有効化
+
+マイグレーション 0006 で cron ジョブ自体は登録済みだが、
+**Vault にシークレットを入れるまでは何もせず空振りする**（警告ログのみ）。
+
+1. ダッシュボード → **Project Settings → API** で `service_role` キーをコピー
+   （**アプリや env/ には絶対に貼らない**。使うのはこの SQL の中だけ）
+2. ダッシュボード → **SQL Editor** で次の 2 行を実行:
+
+   ```sql
+   select vault.create_secret('https://<project-ref>.supabase.co', 'project_url');
+   select vault.create_secret('<service_role キー>', 'service_role_key');
+   ```
+
+3. 動作確認: 翌日以降、**Table Editor → private.sync_jobs** に行が増えていれば
+   日次バッチが動いている（連携 0 件でも 1 行残る = Free プラン一時停止対策の
+   heartbeat を兼ねる）。
 
 ## 6. 運用
 

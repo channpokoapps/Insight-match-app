@@ -27,18 +27,32 @@ Deno.serve(async (req) => {
   const payload: Payload = await req.json().catch(() => ({ trigger: "manual" as const }));
   const db = createServiceClient();
 
-  // 対象の抽出
-  let credentialIds: string[] = [];
+  // 対象の抽出。retry は前回失敗時の attempt を引き継ぐ（バックオフと
+  // 最大試行回数を新ジョブでも継続させるため）。
+  let targets: { credential_id: string; attempt: number }[] = [];
 
   if (payload.trigger === "retry") {
     const { data, error } = await db
       .from("sync_job_items")
-      .select("credential_id")
+      .select("id, credential_id, attempt")
       .eq("status", "retry")
       .lte("next_retry_at", new Date().toISOString())
       .limit(1000);
     if (error) throw error;
-    credentialIds = (data ?? []).map((r) => r.credential_id as string);
+    const rows = data ?? [];
+    targets = rows.map((r) => ({
+      credential_id: r.credential_id as string,
+      attempt: (r.attempt as number) ?? 0,
+    }));
+    // 旧アイテムを終端化する。retry のまま残すと 15 分ごとに再投入され続け、
+    // attempt もリセットされて無限リトライになるため。
+    if (rows.length > 0) {
+      const { error: closeError } = await db
+        .from("sync_job_items")
+        .update({ status: "failed", next_retry_at: null })
+        .in("id", rows.map((r) => r.id as string));
+      if (closeError) throw closeError;
+    }
   } else {
     const { data, error } = await db
       .from("social_credentials")
@@ -46,30 +60,39 @@ Deno.serve(async (req) => {
       .eq("status", "active")
       .limit(10000);
     if (error) throw error;
-    credentialIds = (data ?? []).map((r) => r.id as string);
+    targets = (data ?? []).map((r) => ({ credential_id: r.id as string, attempt: 0 }));
   }
 
-  if (credentialIds.length === 0) {
+  if (targets.length === 0) {
+    // 対象 0 件でも daily はジョブ行を残す。死活監視の記録と、
+    // Supabase Free の「7日間非アクティブで一時停止」の回避を兼ねる。
+    if (payload.trigger === "daily") {
+      await db
+        .from("sync_jobs")
+        .insert({ target_count: 0, finished_at: new Date().toISOString() });
+    }
     safeLog("sync_dispatch_empty", { status: payload.trigger });
     return Response.json({ ok: true, target_count: 0 });
   }
 
   const { data: job, error: jobError } = await db
     .from("sync_jobs")
-    .insert({ target_count: credentialIds.length })
+    .insert({ target_count: targets.length })
     .select("id")
     .single();
   if (jobError) throw jobError;
 
-  const items = credentialIds.map((id) => ({
+  const items = targets.map((t) => ({
     job_id: job.id,
-    credential_id: id,
+    credential_id: t.credential_id,
     status: "pending",
+    attempt: t.attempt,
   }));
   for (let i = 0; i < items.length; i += 500) {
     const { error } = await db.from("sync_job_items").insert(items.slice(i, i + 500));
     if (error) throw error;
   }
+  const credentialIds = targets.map((t) => t.credential_id);
 
   safeLog("sync_dispatch_start", { job_id: job.id, count: credentialIds.length });
 
