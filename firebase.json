@@ -1,5 +1,5 @@
 {
-  "$comment": "Insight Match のデプロイ設定。Firebase は Hosting（お試し Web 版）/ GA4 / FCM のみ使用し、バックエンドは Supabase（supabase/ 配下）。",
+  "$comment": "SNS Insight Matcher のデプロイ設定。Firebase は Hosting（お試し Web 版）/ GA4 / FCM のみ使用し、バックエンドは Supabase（supabase/ 配下）。",
   "hosting": {
     "$comment": "Flutter Web（閲覧専用お試し版）。SPA のため全パスを index.html へ。正式公開の判断まで noindex を維持する。",
     "public": "app/build/web",

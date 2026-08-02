@@ -9,7 +9,7 @@
 
 | 項目 | 暫定値 | 変更できる期限 |
 | --- | --- | --- |
-| サービス名 | Insight Match（インサイトマッチング・仮） | ストア掲載まで |
+| サービス名 | **SNS Insight Matcher**（2026-08 決定） | 決定済み（変更時は本表を更新） |
 | Dart パッケージ名 | `insight_match`（`app/pubspec.yaml`） | いつでも（内部名） |
 | Android applicationId | `app.insightmatch.android`（`app/android/app/build.gradle.kts`） | **Play 公開まで** |
 | ドメイン | 未取得（`OI-44`） | OAuth リダイレクト設定前に確定 |
