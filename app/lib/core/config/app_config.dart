@@ -57,7 +57,7 @@ class AppConfig {
 
   /// 既定の設定値。`config/app_config.json` と同じ内容を保持する。
   static const AppConfig defaultConfig = AppConfig(
-    serviceName: 'Insight Match',
+    serviceName: 'SNS Insight Matcher',
     supportEmail: 'channpoko.apps@gmail.com',
     termsUrl: '',
     privacyUrl: '',

@@ -2,7 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main, develop]
+    # claude/**: GITHUB_TOKEN が作成した PR では pull_request イベントの
+    # ワークフローが発火しない(GitHub の再帰防止仕様)ため、push 時点で CI を回す
+    branches: [main, develop, 'claude/**']
   pull_request:
 
 jobs:
@@ -33,3 +35,17 @@ jobs:
       # マイグレーション適用と権限・RLS・k-匿名性テスト（AGENTS.md §5: これが落ちたらマージ禁止）
       - run: supabase db start
       - run: supabase test db
+
+  edge-functions:
+    name: Edge Functions typecheck / test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: supabase/functions
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - run: deno task check
+      - run: deno task test

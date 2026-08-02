@@ -8,7 +8,7 @@ import 'package:insight_match/shared/widgets/install_prompt.dart';
 /// テスト用の設定値を作る。
 AppConfig _config({String androidStoreUrl = '', bool iosAvailable = false}) {
   return AppConfig(
-    serviceName: 'Insight Match',
+    serviceName: 'SNS Insight Matcher',
     supportEmail: 'test@example.com',
     termsUrl: '',
     privacyUrl: '',

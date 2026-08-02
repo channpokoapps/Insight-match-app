@@ -126,6 +126,13 @@ CI では `flutter analyze` / `flutter test` / マイグレーション適用 �
 - PR には対応する機能 ID（`FR-xxx-nn`）を書く。
 - **DB スキーマの変更を含む PR では、非開示要件（R-1〜R-5）への影響を PR 本文に明記する。**
 
+### Cowork（AI エージェント）経由の変更
+
+- 作業ブランチは `claude/<内容を表すslug>` で切る。
+- `claude/**` ブランチが push されると `.github/workflows/auto-pr.yml` が自動発火し、`main` 向け PR を自動作成する。PR 作成後は既存の `ci.yml`（`flutter analyze`/`test`、マイグレーション適用、`supabase/tests/`）が通常どおり走る。
+- Cowork のサンドボックスは GitHub へのネットワークアクセスがブロックされているため、`git push` はユーザー自身の端末から行う。commit の生成（メッセージ含む）まではエージェントが行い、push 以降（PR 作成・CI）は GitHub Actions 側で自動化する、という分担。
+- 自動マージは設定しない。R-1〜R-5 に関わる変更はレビュー必須のため。
+
 ---
 
 ## 7. 仕様が曖昧なとき

@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/config/app_config.dart';
 import '../../../core/platform/platform_capability.dart';
+import '../../../core/router/app_router.dart';
 import '../../../shared/widgets/install_prompt.dart';
 import '../../auth/data/auth_repository.dart';
 import '../../auth/data/profile_repository.dart';
@@ -84,6 +86,14 @@ class SettingsPage extends ConsumerWidget {
               leading: const Icon(Icons.person_outline),
               title: Text(profile.role.label),
               subtitle: Text('アカウント状態: ${profile.status.label}'),
+            ),
+          if (profile?.role == AppRole.creator)
+            ListTile(
+              leading: const Icon(Icons.link),
+              title: const Text('SNS 連携'),
+              subtitle: const Text('Instagram アカウントの連携・状態確認'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => context.push(AppRoutes.snsLink),
             ),
           if (capability.isWeb) ...<Widget>[
             const Divider(),

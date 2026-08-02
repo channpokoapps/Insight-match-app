@@ -1,6 +1,6 @@
 {
-    "name": "Insight Match",
-    "short_name": "Insight Match",
+    "name": "SNS Insight Matcher",
+    "short_name": "SNS Insight Matcher",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

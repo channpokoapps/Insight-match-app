@@ -5,6 +5,8 @@ import 'package:go_router/go_router.dart';
 import '../../../core/platform/platform_capability.dart';
 import '../../../core/router/app_router.dart';
 import '../../../shared/widgets/campaign_card.dart';
+import '../../sns_link/data/sns_link_repository.dart';
+import '../../sns_link/domain/sns_link_status.dart';
 import '../data/campaign_repository.dart';
 import '../domain/campaign.dart';
 
@@ -22,6 +24,28 @@ class CampaignListPage extends ConsumerStatefulWidget {
 class _CampaignListPageState extends ConsumerState<CampaignListPage> {
   /// Web お試し版の案内バナーを表示するか。閉じたらセッション中は再表示しない。
   late bool _showTrialBanner = ref.read(platformCapabilityProvider).isWeb;
+
+  /// SNS 未連携の案内バナーを表示するか（Android のみ）。
+  bool _showSnsBanner = true;
+
+  /// Instagram が未連携（または要再認可）かどうか。取得前は false。
+  bool _needsSnsLink() {
+    if (ref.read(platformCapabilityProvider).isWeb) {
+      return false;
+    }
+    final List<SnsLinkStatus>? statuses =
+        ref.watch(mySnsLinkStatusProvider).valueOrNull;
+    if (statuses == null) {
+      return false;
+    }
+    for (final SnsLinkStatus s in statuses) {
+      if (s.platform == SocialPlatform.instagram &&
+          s.state == SnsLinkState.active) {
+        return false;
+      }
+    }
+    return true;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -52,6 +76,23 @@ class _CampaignListPageState extends ConsumerState<CampaignListPage> {
                 TextButton(
                   onPressed: () => setState(() => _showTrialBanner = false),
                   child: const Text('閉じる'),
+                ),
+              ],
+            )
+          else if (_showSnsBanner && _needsSnsLink())
+            MaterialBanner(
+              content: const Text(
+                'Instagram を連携すると、条件に合う案件へ応募できるようになります。',
+              ),
+              leading: const Icon(Icons.link),
+              actions: <Widget>[
+                TextButton(
+                  onPressed: () => setState(() => _showSnsBanner = false),
+                  child: const Text('あとで'),
+                ),
+                FilledButton.tonal(
+                  onPressed: () => context.push(AppRoutes.snsLink),
+                  child: const Text('連携する'),
                 ),
               ],
             ),

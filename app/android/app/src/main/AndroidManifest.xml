@@ -2,7 +2,7 @@
     <!-- Supabase / Firebase への通信に必須 -->
     <uses-permission android:name="android.permission.INTERNET"/>
     <application
-        android:label="Insight Match"
+        android:label="SNS Insight Matcher"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
@@ -25,6 +25,13 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+            <!-- SNS 連携（外部ブラウザでの OAuth）完了後にアプリへ戻るためのカスタムスキーム -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="insightmatch" android:host="sns-link"/>
             </intent-filter>
         </activity>
         <!-- Don't delete the meta-data below.

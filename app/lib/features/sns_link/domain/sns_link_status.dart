@@ -1,5 +1,7 @@
 import '../../search/domain/criteria.dart';
 
+export '../../search/domain/criteria.dart' show SocialPlatform;
+
 /// SNS 連携の状態。
 ///
 /// **数値フィールドを定義しないこと。**

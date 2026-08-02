@@ -1,6 +1,6 @@
 {
   "$comment": "環境に依存しない公開設定値。app/lib/core/config/app_config.dart の defaultConfig と必ず一致させること。資格情報は置かない（それらは env/ 配下）。",
-  "service_name": "Insight Match",
+  "service_name": "SNS Insight Matcher",
   "support_email": "channpoko.apps@gmail.com",
   "terms_url": "",
   "privacy_url": "",
