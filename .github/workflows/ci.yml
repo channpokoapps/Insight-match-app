@@ -2,7 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main, develop]
+    # claude/**: GITHUB_TOKEN が作成した PR では pull_request イベントの
+    # ワークフローが発火しない(GitHub の再帰防止仕様)ため、push 時点で CI を回す
+    branches: [main, develop, 'claude/**']
   pull_request:
 
 jobs:

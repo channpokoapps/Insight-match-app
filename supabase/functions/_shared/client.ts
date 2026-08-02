@@ -1,43 +1,37 @@
 // _shared/client.ts
-// Edge Function から Supabase にアクセスするための共通クライアント。
+// Edge Function の呼び出し元検証とログのサニタイズ。
 //
 // 注意:
 //   - service_role キーは Edge Function の環境変数からのみ読む。アプリに埋め込まない（AGENTS.md R-6）。
-//   - private スキーマへのアクセスはこのクライアント経由に限る。
-
-import { createClient, SupabaseClient } from "@supabase/supabase-js";
-
-// deno-lint-ignore no-explicit-any
-export function createServiceClient(): SupabaseClient<any, "private", any> {
-    const url = Deno.env.get("SUPABASE_URL");
-    const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    if (!url || !key) {
-        throw new Error("SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY が設定されていません");
-    }
-    return createClient(url, key, {
-        auth: { persistSession: false },
-        db: { schema: "private" },
-    });
-}
-
-export function createPublicServiceClient(): SupabaseClient {
-    const url = Deno.env.get("SUPABASE_URL");
-    const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    if (!url || !key) {
-        throw new Error("SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY が設定されていません");
-    }
-    return createClient(url, key, { auth: { persistSession: false } });
-}
+//   - DB アクセスは _shared/db.ts（直接 SQL）を使う。private は PostgREST に公開しない（R-2）。
 
 /**
  * 呼び出し元が service_role であることを確認する。
  * pg_cron / 管理用途以外から叩かれないようにする。
+ *
+ * 完全一致に加えて JWT の role クレームも許容する。ゲートウェイ
+ * （verify_jwt）が署名検証済みの前提であり、Vault に登録した
+ * service_role キーが環境変数と別発行でも動くようにするため。
  */
 export function assertServiceRole(req: Request): void {
     const auth = req.headers.get("Authorization") ?? "";
     const expected = `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`;
-    if (auth !== expected) {
-        throw new Response("unauthorized", { status: 401 });
+    if (auth === expected) return;
+    const payload = decodeJwtPayload(auth.replace(/^Bearer\s+/i, ""));
+    if (payload?.role === "service_role") return;
+    throw new Response("unauthorized", { status: 401 });
+}
+
+/** JWT のペイロード部を検証なしでデコードする（署名検証はゲートウェイ側）。 */
+function decodeJwtPayload(token: string): { role?: string } | null {
+    const parts = token.split(".");
+    if (parts.length !== 3) return null;
+    try {
+        const b64 = parts[1].replaceAll("-", "+").replaceAll("_", "/");
+        const padded = b64 + "=".repeat((4 - (b64.length % 4)) % 4);
+        return JSON.parse(atob(padded)) as { role?: string };
+    } catch {
+        return null;
     }
 }
 

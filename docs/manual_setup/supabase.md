@@ -96,6 +96,14 @@ supabase secrets set META_APP_ID=... META_APP_SECRET=...
    select vault.create_secret('<service_role キー>', 'service_role_key');
    ```
 
+   CLI からも実行できる（**`--linked` を忘れると本番でなくローカル DB に入る**ので注意）:
+
+   ```bash
+   supabase db query --linked "select vault.create_secret('...', 'project_url');"
+   ```
+
+   ※ 2026-08-02 実施済み。
+
 3. 動作確認: 翌日以降、**Table Editor → private.sync_jobs** に行が増えていれば
    日次バッチが動いている（連携 0 件でも 1 行残る = Free プラン一時停止対策の
    heartbeat を兼ねる）。

@@ -5,8 +5,10 @@
 //   - 取得した数値は private スキーマにしか書かない（AGENTS.md R-1）
 //   - 数値をログに出さない（R-7）
 //   - 失敗は指数バックオフで最大5回まで再試行する（ADR-0004）
+//   - private へは直接 SQL で接続する（PostgREST に private を公開しない R-2）
 
-import { assertServiceRole, createServiceClient, safeLog } from "../_shared/client.ts";
+import { assertServiceRole, safeLog } from "../_shared/client.ts";
+import { sql } from "../_shared/db.ts";
 import { decryptToken, encryptToken } from "../_shared/crypto.ts";
 import {
   aggregateWindows,
@@ -39,6 +41,16 @@ interface Payload {
   credential_ids: string[];
 }
 
+interface Credential {
+  id: string;
+  user_id: string;
+  platform: string;
+  external_account_id: string;
+  access_token_encrypted: string;
+  token_expires_at: Date | null;
+  status: string;
+}
+
 Deno.serve(async (req) => {
   try {
     assertServiceRole(req);
@@ -47,49 +59,43 @@ Deno.serve(async (req) => {
   }
 
   const { job_id, credential_ids }: Payload = await req.json();
-  const db = createServiceClient();
+  const db = sql();
 
   let success = 0;
   let failure = 0;
 
   for (const credentialId of credential_ids) {
     try {
-      await syncOne(db, credentialId);
-      await db
-        .from("sync_job_items")
-        .update({ status: "success", error_code: null, error_message: null })
-        .eq("job_id", job_id)
-        .eq("credential_id", credentialId);
+      await syncOne(credentialId);
+      await db`
+        update private.sync_job_items
+           set status = 'success', error_code = null, error_message = null
+         where job_id = ${job_id} and credential_id = ${credentialId}`;
       success += 1;
     } catch (e) {
       failure += 1;
       const code = classifyError(e);
-      const { data } = await db
-        .from("sync_job_items")
-        .select("attempt")
-        .eq("job_id", job_id)
-        .eq("credential_id", credentialId)
-        .single();
-      const attempt = (data?.attempt ?? 0) + 1;
+      const [item]: { attempt: number }[] = await db`
+        select attempt from private.sync_job_items
+         where job_id = ${job_id} and credential_id = ${credentialId}`;
+      const attempt = (item?.attempt ?? 0) + 1;
       const retryable = code !== "AUTH_REVOKED" && attempt < MAX_ATTEMPT;
+      const nextRetryAt = retryable
+        ? new Date(Date.now() + BACKOFF_MINUTES[attempt - 1] * 60_000)
+        : null;
 
-      await db
-        .from("sync_job_items")
-        .update({
-          status: retryable ? "retry" : "failed",
-          attempt,
-          error_code: code,
-          // 例外メッセージにトークンが含まれうるため保存しない
-          error_message: null,
-          next_retry_at: retryable
-            ? new Date(Date.now() + BACKOFF_MINUTES[attempt - 1] * 60_000).toISOString()
-            : null,
-        })
-        .eq("job_id", job_id)
-        .eq("credential_id", credentialId);
+      // 例外メッセージにトークンが含まれうるため error_message は保存しない
+      await db`
+        update private.sync_job_items
+           set status = ${retryable ? "retry" : "failed"},
+               attempt = ${attempt},
+               error_code = ${code},
+               error_message = null,
+               next_retry_at = ${nextRetryAt}
+         where job_id = ${job_id} and credential_id = ${credentialId}`;
 
       if (code === "AUTH_REVOKED") {
-        await markReauthRequired(db, credentialId);
+        await markReauthRequired(credentialId);
       }
       safeLog("sync_item_failed", { job_id, credential_id: credentialId, error_code: code });
     }
@@ -100,14 +106,15 @@ Deno.serve(async (req) => {
   return Response.json({ ok: true, success, failure });
 });
 
-// deno-lint-ignore no-explicit-any
-async function syncOne(db: any, credentialId: string): Promise<void> {
-  const { data: cred, error } = await db
-    .from("social_credentials")
-    .select("id, user_id, platform, external_account_id, access_token_encrypted, token_expires_at, status")
-    .eq("id", credentialId)
-    .single();
-  if (error) throw error;
+async function syncOne(credentialId: string): Promise<void> {
+  const db = sql();
+  const [cred]: Credential[] = await db`
+    select id, user_id, platform, external_account_id,
+           access_token_encrypted::text as access_token_encrypted,
+           token_expires_at, status
+      from private.social_credentials
+     where id = ${credentialId}`;
+  if (!cred) throw new Error("API_ERROR");
   if (cred.status !== "active") throw new Error("AUTH_REVOKED");
 
   if (cred.platform !== "instagram") {
@@ -116,7 +123,7 @@ async function syncOne(db: any, credentialId: string): Promise<void> {
   }
 
   let token = await decryptToken(cred.access_token_encrypted);
-  token = await maybeRefreshToken(db, cred, token);
+  token = await maybeRefreshToken(cred, token);
 
   // --- 投稿一覧と個別インサイトの取得（要件 9-4-3） ------------------------
   const media = await fetchAllMedia(cred.external_account_id, token);
@@ -127,8 +134,8 @@ async function syncOne(db: any, credentialId: string): Promise<void> {
     const rows = media.map((m) => ({
       credential_id: cred.id,
       external_media_id: m.id,
-      media_type: m.media_type,
-      permalink: m.permalink,
+      media_type: m.media_type ?? null,
+      permalink: m.permalink ?? null,
       posted_at: m.timestamp,
       reach: m.reach ?? null,
       impressions: m.impressions ?? null,
@@ -137,48 +144,61 @@ async function syncOne(db: any, credentialId: string): Promise<void> {
       saves: m.saved ?? null,
       shares: m.shares ?? null,
       views: m.views ?? null,
-      fetched_at: new Date().toISOString(),
+      fetched_at: new Date(),
     }));
-    const { error: upsertError } = await db
-      .from("media_snapshots")
-      .upsert(rows, { onConflict: "credential_id,external_media_id" });
-    if (upsertError) throw upsertError;
+    for (let i = 0; i < rows.length; i += 200) {
+      const chunk = rows.slice(i, i + 200);
+      await db`
+        insert into private.media_snapshots ${db(chunk)}
+        on conflict (credential_id, external_media_id) do update set
+          media_type = excluded.media_type,
+          permalink = excluded.permalink,
+          posted_at = excluded.posted_at,
+          reach = excluded.reach,
+          impressions = excluded.impressions,
+          likes = excluded.likes,
+          comments = excluded.comments,
+          saves = excluded.saves,
+          shares = excluded.shares,
+          views = excluded.views,
+          fetched_at = excluded.fetched_at`;
+    }
   }
 
   // --- 集計（_shared/insights.ts の純粋関数） -----------------------------
   for (const w of aggregateWindows(media, Date.now())) {
-    const { error: metricError } = await db.from("creator_metrics").upsert(
-      {
-        user_id: cred.user_id,
-        platform: "instagram",
-        window_days: w.window_days,
-        followers,
-        avg_reach: w.avg_reach,
-        avg_impressions: w.avg_impressions,
-        avg_likes: w.avg_likes,
-        avg_comments: w.avg_comments,
-        avg_saves: w.avg_saves,
-        avg_shares: w.avg_shares,
-        avg_views: w.avg_views,
-        engagement_rate: w.engagement_rate,
-        post_count: w.post_count,
-        computed_at: new Date().toISOString(),
-      },
-      { onConflict: "user_id,platform,window_days" },
-    );
-    if (metricError) throw metricError;
+    await db`
+      insert into private.creator_metrics
+        (user_id, platform, window_days, followers, avg_reach, avg_impressions,
+         avg_likes, avg_comments, avg_saves, avg_shares, avg_views,
+         engagement_rate, post_count, computed_at)
+      values
+        (${cred.user_id}, 'instagram', ${w.window_days}, ${followers},
+         ${w.avg_reach}, ${w.avg_impressions}, ${w.avg_likes}, ${w.avg_comments},
+         ${w.avg_saves}, ${w.avg_shares}, ${w.avg_views},
+         ${w.engagement_rate}, ${w.post_count}, now())
+      on conflict (user_id, platform, window_days) do update set
+        followers = excluded.followers,
+        avg_reach = excluded.avg_reach,
+        avg_impressions = excluded.avg_impressions,
+        avg_likes = excluded.avg_likes,
+        avg_comments = excluded.avg_comments,
+        avg_saves = excluded.avg_saves,
+        avg_shares = excluded.avg_shares,
+        avg_views = excluded.avg_views,
+        engagement_rate = excluded.engagement_rate,
+        post_count = excluded.post_count,
+        computed_at = excluded.computed_at`;
   }
 
   // --- オーディエンス属性（T-021。取得のみ、条件には使わない = OI-35） ----
-  await syncDemographics(db, cred, token);
+  await syncDemographics(cred, token);
 
   // public 側には「同期できた」という事実だけを書く
-  const publicDb = db.schema("public");
-  await publicDb
-    .from("social_links")
-    .update({ last_synced_at: new Date().toISOString(), status: "active" })
-    .eq("user_id", cred.user_id)
-    .eq("platform", "instagram");
+  await db`
+    update public.social_links
+       set last_synced_at = now(), status = 'active'
+     where user_id = ${cred.user_id} and platform = 'instagram'`;
 }
 
 /**
@@ -187,8 +207,7 @@ async function syncOne(db: any, credentialId: string): Promise<void> {
  * META_APP_ID / META_APP_SECRET が未設定の間はスキップする。
  * 交換が認可エラーで失敗した場合は再認可が必要。
  */
-// deno-lint-ignore no-explicit-any
-async function maybeRefreshToken(db: any, cred: any, token: string): Promise<string> {
+async function maybeRefreshToken(cred: Credential, token: string): Promise<string> {
   const expiresAt = cred.token_expires_at ? new Date(cred.token_expires_at).getTime() : null;
   if (
     expiresAt === null ||
@@ -215,33 +234,30 @@ async function maybeRefreshToken(db: any, cred: any, token: string): Promise<str
   if (typeof body.access_token !== "string") return token;
 
   const newExpiresAt = typeof body.expires_in === "number"
-    ? new Date(Date.now() + body.expires_in * 1000).toISOString()
-    : new Date(Date.now() + 60 * 86_400_000).toISOString();
-  await db
-    .from("social_credentials")
-    .update({
-      access_token_encrypted: await encryptToken(body.access_token),
-      token_expires_at: newExpiresAt,
-    })
-    .eq("id", cred.id);
+    ? new Date(Date.now() + body.expires_in * 1000)
+    : new Date(Date.now() + 60 * 86_400_000);
+  const encrypted = await encryptToken(body.access_token);
+  await sql()`
+    update private.social_credentials
+       set access_token_encrypted = cast(${encrypted} as bytea),
+           token_expires_at = ${newExpiresAt}
+     where id = ${cred.id}`;
   safeLog("token_refreshed", { credential_id: cred.id, platform: "instagram" });
   return body.access_token;
 }
 
-// deno-lint-ignore no-explicit-any
-async function markReauthRequired(db: any, credentialId: string): Promise<void> {
-  const { data } = await db
-    .from("social_credentials")
-    .update({ status: "reauth_required" })
-    .eq("id", credentialId)
-    .select("user_id, platform")
-    .single();
-  if (!data) return;
-  await db.schema("public")
-    .from("social_links")
-    .update({ status: "reauth_required" })
-    .eq("user_id", data.user_id)
-    .eq("platform", data.platform);
+async function markReauthRequired(credentialId: string): Promise<void> {
+  const db = sql();
+  const [row]: { user_id: string; platform: string }[] = await db`
+    update private.social_credentials
+       set status = 'reauth_required'
+     where id = ${credentialId}
+     returning user_id, platform`;
+  if (!row) return;
+  await db`
+    update public.social_links
+       set status = 'reauth_required'
+     where user_id = ${row.user_id} and platform = ${row.platform}`;
 }
 
 /** メディア一覧をページネーションで取得する。集計対象期間より古い投稿で打ち切る。 */
@@ -331,8 +347,8 @@ async function fetchInstagramFollowers(accountId: string, token: string): Promis
  *
  * 条件式には使わない（OI-35）。取得失敗は同期全体を失敗させない。
  */
-// deno-lint-ignore no-explicit-any
-async function syncDemographics(db: any, cred: any, token: string): Promise<void> {
+async function syncDemographics(cred: Credential, token: string): Promise<void> {
+  const db = sql();
   for (const dimension of ["age", "gender", "city"] as const) {
     try {
       const res = await fetch(
@@ -349,11 +365,13 @@ async function syncDemographics(db: any, cred: any, token: string): Promise<void
         dimension,
         bucket: r.bucket,
         ratio: r.ratio,
-        computed_at: new Date().toISOString(),
+        computed_at: new Date(),
       }));
-      await db
-        .from("audience_demographics")
-        .upsert(rows, { onConflict: "user_id,platform,dimension,bucket" });
+      await db`
+        insert into private.audience_demographics ${db(rows)}
+        on conflict (user_id, platform, dimension, bucket) do update set
+          ratio = excluded.ratio,
+          computed_at = excluded.computed_at`;
     } catch {
       // 属性は補助情報。失敗しても同期は続行する
     }

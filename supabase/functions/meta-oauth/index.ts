@@ -12,7 +12,8 @@
 //   - トークンは暗号化して private にのみ保存する（R-1 / ADR-0006）。
 
 import { createClient } from "@supabase/supabase-js";
-import { createPublicServiceClient, createServiceClient, safeLog } from "../_shared/client.ts";
+import { safeLog } from "../_shared/client.ts";
+import { sql } from "../_shared/db.ts";
 import { encryptToken, issueState, verifyState } from "../_shared/crypto.ts";
 
 const GRAPH = "https://graph.facebook.com/v21.0";
@@ -150,62 +151,58 @@ async function handleCallback(url: URL): Promise<Response> {
     );
   }
 
-  // 暗号化して保存（private のみ。R-1 / ADR-0006）
+  // 暗号化して保存（private のみ。R-1 / ADR-0006。直接 SQL = R-2 維持）
   const encrypted = await encryptToken(longToken);
-  const db = createServiceClient();
-  const { data: cred, error: upsertError } = await db
-    .from("social_credentials")
-    .upsert(
-      {
-        user_id: userId,
-        platform: "instagram",
-        external_account_id: igAccount.id,
-        external_username: igAccount.username ?? null,
-        account_type: "business",
-        access_token_encrypted: encrypted,
-        token_expires_at: expiresAt,
-        scopes: SCOPES.split(","),
-        status: "active",
-      },
-      { onConflict: "user_id,platform" },
-    )
-    .select("id")
-    .single();
-  if (upsertError || !cred) {
+  const db = sql();
+  let credId: string;
+  try {
+    const [cred]: { id: string }[] = await db`
+      insert into private.social_credentials
+        (user_id, platform, external_account_id, external_username,
+         account_type, access_token_encrypted, token_expires_at, scopes, status)
+      values
+        (${userId}, 'instagram', ${igAccount.id}, ${igAccount.username ?? null},
+         'business', cast(${encrypted} as bytea), ${expiresAt},
+         ${SCOPES.split(",")}, 'active')
+      on conflict (user_id, platform) do update set
+        external_account_id = excluded.external_account_id,
+        external_username = excluded.external_username,
+        account_type = excluded.account_type,
+        access_token_encrypted = excluded.access_token_encrypted,
+        token_expires_at = excluded.token_expires_at,
+        scopes = excluded.scopes,
+        status = 'active'
+      returning id`;
+    credId = cred.id;
+
+    // public には「連携済み」という事実だけを書く
+    await db`
+      insert into public.social_links (user_id, platform, status, linked_at)
+      values (${userId}, 'instagram', 'active', now())
+      on conflict (user_id, platform) do update set
+        status = 'active', linked_at = now()`;
+  } catch {
     safeLog("meta_oauth_error", { error_code: "DB_UPSERT" });
     return resultPage(false, "保存に失敗しました。再度お試しください。");
   }
 
-  // public には「連携済み」という事実だけを書く
-  const publicDb = createPublicServiceClient();
-  await publicDb.from("social_links").upsert(
-    {
-      user_id: userId,
-      platform: "instagram",
-      status: "active",
-      linked_at: new Date().toISOString(),
-    },
-    { onConflict: "user_id,platform" },
-  );
-
   // 初回同期を即時実行する（OI-24。失敗しても連携自体は成立）
-  await enqueueInitialSync(db, cred.id);
+  await enqueueInitialSync(credId);
 
   safeLog("meta_oauth_linked", { user_id: userId, platform: "instagram" });
   return resultPage(true, "Instagram との連携が完了しました。アプリに戻ってください。");
 }
 
 /** 連携直後の初回同期。sync_jobs に記録してから sync-worker を非同期起動する。 */
-// deno-lint-ignore no-explicit-any
-async function enqueueInitialSync(db: any, credentialId: string): Promise<void> {
+async function enqueueInitialSync(credentialId: string): Promise<void> {
   try {
-    const { data: job } = await db
-      .from("sync_jobs")
-      .insert({ target_count: 1 })
-      .select("id")
-      .single();
+    const db = sql();
+    const [job]: { id: string }[] = await db`
+      insert into private.sync_jobs (target_count) values (1) returning id`;
     if (!job) return;
-    await db.from("sync_job_items").insert({ job_id: job.id, credential_id: credentialId });
+    await db`
+      insert into private.sync_job_items (job_id, credential_id)
+      values (${job.id}, ${credentialId})`;
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -231,7 +228,7 @@ function resultPage(ok: boolean, message: string): Response {
 <html lang="ja"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
-<title>${title} - Insight Match</title>
+<title>${title} - SNS Insight Matcher</title>
 <style>
 body{font-family:sans-serif;display:flex;align-items:center;justify-content:center;
 min-height:100vh;margin:0;background:#f5f7fa;color:#1a1a2e}
