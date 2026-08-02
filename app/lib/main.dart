@@ -8,6 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/env/env.dart';
 import 'core/firebase/web_firebase_options.dart';
 import 'core/router/app_router.dart';
+import 'core/theme/app_theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -55,10 +56,7 @@ class App extends ConsumerWidget {
     return MaterialApp.router(
       title: 'SNS Insight Matcher',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF3A7AFE)),
-        useMaterial3: true,
-      ),
+      theme: AppTheme.light(),
       locale: const Locale('ja'),
       supportedLocales: const <Locale>[Locale('ja'), Locale('en')],
       localizationsDelegates: const <LocalizationsDelegate<dynamic>>[

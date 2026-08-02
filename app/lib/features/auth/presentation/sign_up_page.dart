@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/error/app_failure.dart';
+import '../../../core/theme/app_theme.dart';
+import '../../../shared/widgets/error_notice.dart';
 import '../data/auth_repository.dart';
 
 /// アカウント新規作成画面。
@@ -22,6 +24,7 @@ class _SignUpPageState extends ConsumerState<SignUpPage> {
   final TextEditingController _passwordConfirm = TextEditingController();
   bool _submitting = false;
   bool _sent = false;
+  bool _showPassword = false;
   String? _error;
 
   @override
@@ -89,17 +92,34 @@ class _SignUpPageState extends ConsumerState<SignUpPage> {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        const Icon(Icons.mark_email_read_outlined, size: 56),
-        const SizedBox(height: 16),
+        Container(
+          width: 72,
+          height: 72,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: AppTheme.successGreen.withValues(alpha: 0.1),
+            shape: BoxShape.circle,
+          ),
+          child: const Icon(
+            Icons.mark_email_read_outlined,
+            size: 36,
+            color: AppTheme.successGreen,
+          ),
+        ),
+        const SizedBox(height: 20),
         Text(
           '確認メールを送信しました',
-          style: Theme.of(context).textTheme.titleLarge,
+          style: Theme.of(context)
+              .textTheme
+              .titleLarge
+              ?.copyWith(fontWeight: FontWeight.w700),
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 12),
-        const Text(
+        Text(
           'メール内のリンクを開くと登録が完了します。'
           '届かない場合は迷惑メールフォルダを確認してください。',
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.6),
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 24),
@@ -120,38 +140,51 @@ class _SignUpPageState extends ConsumerState<SignUpPage> {
           controller: _email,
           keyboardType: TextInputType.emailAddress,
           autofillHints: const <String>[AutofillHints.email],
-          decoration: const InputDecoration(labelText: 'メールアドレス'),
+          decoration: const InputDecoration(
+            labelText: 'メールアドレス',
+            prefixIcon: Icon(Icons.mail_outline),
+          ),
         ),
         const SizedBox(height: 12),
         TextField(
           controller: _password,
-          obscureText: true,
+          obscureText: !_showPassword,
           autofillHints: const <String>[AutofillHints.newPassword],
-          decoration: const InputDecoration(
+          decoration: InputDecoration(
             labelText: 'パスワード',
             helperText: '$MIN_PASSWORD_LENGTH 文字以上・英字と数字を含む',
+            prefixIcon: const Icon(Icons.lock_outline),
+            suffixIcon: IconButton(
+              icon: Icon(
+                _showPassword
+                    ? Icons.visibility_off_outlined
+                    : Icons.visibility_outlined,
+              ),
+              tooltip: _showPassword ? 'パスワードを隠す' : 'パスワードを表示',
+              onPressed: () => setState(() => _showPassword = !_showPassword),
+            ),
           ),
         ),
         const SizedBox(height: 12),
         TextField(
           controller: _passwordConfirm,
-          obscureText: true,
-          decoration: const InputDecoration(labelText: 'パスワード（確認）'),
+          obscureText: !_showPassword,
+          decoration: const InputDecoration(
+            labelText: 'パスワード（確認）',
+            prefixIcon: Icon(Icons.lock_outline),
+          ),
         ),
         if (_error != null) ...<Widget>[
           const SizedBox(height: 12),
-          Text(
-            _error!,
-            style: TextStyle(color: Theme.of(context).colorScheme.error),
-          ),
+          ErrorNotice(message: _error!),
         ],
         const SizedBox(height: 24),
         FilledButton(
           onPressed: _submitting ? null : _signUp,
           child: _submitting
               ? const SizedBox(
-                  height: 18,
-                  width: 18,
+                  height: 20,
+                  width: 20,
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
               : const Text('登録する'),

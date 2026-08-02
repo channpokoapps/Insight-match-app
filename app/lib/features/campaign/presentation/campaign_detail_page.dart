@@ -27,14 +27,32 @@ class CampaignDetailPage extends ConsumerWidget {
     final AsyncValue<CampaignDetail> detail =
         ref.watch(campaignDetailProvider(campaignId));
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('案件詳細')),
-      body: detail.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (Object e, StackTrace _) =>
-            const Center(child: Text('案件を取得できませんでした。')),
-        data: (CampaignDetail campaign) => _Body(campaign: campaign),
+    return detail.when(
+      loading: () => Scaffold(
+        appBar: AppBar(title: const Text('案件詳細')),
+        body: const Center(child: CircularProgressIndicator()),
       ),
+      error: (Object e, StackTrace _) => Scaffold(
+        appBar: AppBar(title: const Text('案件詳細')),
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Icon(Icons.wifi_off, size: 48, color: Colors.grey.shade400),
+              const SizedBox(height: 12),
+              const Text('案件を取得できませんでした。'),
+              const SizedBox(height: 16),
+              FilledButton.icon(
+                icon: const Icon(Icons.refresh),
+                onPressed: () =>
+                    ref.invalidate(campaignDetailProvider(campaignId)),
+                label: const Text('再読み込み'),
+              ),
+            ],
+          ),
+        ),
+      ),
+      data: (CampaignDetail campaign) => _Body(campaign: campaign),
     );
   }
 }
@@ -90,67 +108,141 @@ class _BodyState extends ConsumerState<_Body> {
     final CampaignDetailBody? body = campaign.detail;
     final ThemeData theme = Theme.of(context);
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(campaign.title, style: theme.textTheme.headlineSmall),
-          const SizedBox(height: 4),
-          Text(campaign.storeName, style: theme.textTheme.bodyMedium),
-          const SizedBox(height: 16),
-          if (body == null) ...<Widget>[
-            Card(
-              color: theme.colorScheme.surfaceContainerHighest,
-              child: const Padding(
-                padding: EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Row(
-                      children: <Widget>[
-                        Icon(Icons.lock_outline),
-                        SizedBox(width: 8),
-                        Text('この案件の応募条件を満たしていません'),
-                      ],
-                    ),
-                    SizedBox(height: 8),
-                    // 「どの条件が足りないか」は表示しない。
-                    // 不足条件を出すと、自分や他者のインサイト値の推測材料になるため。
-                    // 開示範囲の最終決定は OI-29。
-                    Text('条件を満たすと、報酬内容や投稿条件を確認して応募できます。'),
-                  ],
+    return Scaffold(
+      appBar: AppBar(title: const Text('案件詳細')),
+      // 応募ボタンはスクロール位置に関係なく届く固定フッターに置く
+      // （チャットアプリの送信ボタンと同じ到達性を持たせる）。
+      bottomNavigationBar: body == null
+          ? null
+          : Container(
+              color: Colors.white,
+              child: SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                  child: FilledButton(
+                    onPressed: _submitting ? null : _apply,
+                    child: _submitting
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text('この案件に応募する'),
+                  ),
                 ),
               ),
             ),
-          ] else ...<Widget>[
-            _Section(title: '報酬', child: Text(body.rewardDescription)),
-            _Section(title: '投稿してほしい内容', child: Text(body.requiredContent)),
-            _Section(
-              title: '必須ハッシュタグ',
-              child: Wrap(
-                spacing: 8,
-                children: body.hashtags
-                    .map((String tag) => Chip(label: Text(tag)))
-                    .toList(),
-              ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text(
+              campaign.title,
+              style: theme.textTheme.headlineSmall
+                  ?.copyWith(fontWeight: FontWeight.w700, height: 1.3),
             ),
-            _Section(
-              title: '投稿期間',
-              child: Text(
-                '${_formatDate(body.postStartAt)} 〜 ${_formatDate(body.postEndAt)}',
-              ),
+            const SizedBox(height: 6),
+            Row(
+              children: <Widget>[
+                Icon(Icons.storefront_outlined,
+                    size: 16, color: Colors.grey.shade600),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(
+                    campaign.storeName,
+                    style: theme.textTheme.bodyMedium
+                        ?.copyWith(color: Colors.grey.shade700),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: _submitting ? null : _apply,
-                child: const Text('応募する'),
+            const SizedBox(height: 16),
+            if (body == null)
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: <Widget>[
+                      Container(
+                        width: 56,
+                        height: 56,
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade100,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(Icons.lock_outline,
+                            size: 28, color: Colors.grey.shade500),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'この案件の応募条件を満たしていません',
+                        style: theme.textTheme.titleSmall,
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 8),
+                      // 「どの条件が足りないか」は表示しない。
+                      // 不足条件を出すと、自分や他者のインサイト値の推測材料になるため。
+                      // 開示範囲の最終決定は OI-29。
+                      Text(
+                        '条件を満たすと、報酬内容や投稿条件を確認して応募できます。',
+                        style: theme.textTheme.bodySmall
+                            ?.copyWith(color: Colors.grey.shade600),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            else ...<Widget>[
+              _SectionCard(
+                icon: Icons.card_giftcard,
+                title: '報酬',
+                child: Text(body.rewardDescription,
+                    style: theme.textTheme.bodyMedium?.copyWith(height: 1.6)),
               ),
-            ),
+              _SectionCard(
+                icon: Icons.edit_note,
+                title: '投稿してほしい内容',
+                child: Text(body.requiredContent,
+                    style: theme.textTheme.bodyMedium?.copyWith(height: 1.6)),
+              ),
+              _SectionCard(
+                icon: Icons.tag,
+                title: '必須ハッシュタグ',
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: body.hashtags
+                      .map(
+                        (String tag) => Chip(
+                          label: Text(
+                            tag.startsWith('#') ? tag : '#$tag',
+                            style: TextStyle(
+                              color: theme.colorScheme.primary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          backgroundColor: theme.colorScheme.primary
+                              .withValues(alpha: 0.08),
+                          side: BorderSide.none,
+                        ),
+                      )
+                      .toList(),
+                ),
+              ),
+              _SectionCard(
+                icon: Icons.event_available,
+                title: '投稿期間',
+                child: Text(
+                  '${_formatDate(body.postStartAt)} 〜 ${_formatDate(body.postEndAt)}',
+                  style: theme.textTheme.bodyMedium,
+                ),
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
@@ -161,23 +253,45 @@ class _BodyState extends ConsumerState<_Body> {
   }
 }
 
-class _Section extends StatelessWidget {
-  const _Section({required this.title, required this.child});
+/// アイコン付きのセクションカード。情報のまとまりを視覚的に区切る。
+class _SectionCard extends StatelessWidget {
+  const _SectionCard({
+    required this.icon,
+    required this.title,
+    required this.child,
+  });
 
+  final IconData icon;
   final String title;
   final Widget child;
 
   @override
   Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
     return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(title, style: Theme.of(context).textTheme.titleSmall),
-          const SizedBox(height: 4),
-          child,
-        ],
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Row(
+                children: <Widget>[
+                  Icon(icon, size: 18, color: theme.colorScheme.primary),
+                  const SizedBox(width: 8),
+                  Text(
+                    title,
+                    style: theme.textTheme.titleSmall
+                        ?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              child,
+            ],
+          ),
+        ),
       ),
     );
   }

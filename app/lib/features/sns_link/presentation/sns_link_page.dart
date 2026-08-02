@@ -5,6 +5,9 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/error/app_failure.dart';
 import '../../../core/platform/platform_capability.dart';
+import '../../../core/router/app_router.dart';
+import '../../../core/theme/app_theme.dart';
+import '../../../shared/widgets/app_bottom_nav.dart';
 import '../../../shared/widgets/install_prompt.dart';
 import '../data/sns_link_repository.dart';
 import '../domain/sns_link_status.dart';
@@ -73,6 +76,7 @@ class _SnsLinkPageState extends ConsumerState<SnsLinkPage>
         ref.watch(mySnsLinkStatusProvider);
     return Scaffold(
       appBar: AppBar(title: const Text('SNS 連携')),
+      bottomNavigationBar: const AppBottomNav(current: AppRoutes.snsLink),
       body: RefreshIndicator(
         onRefresh: () async => ref.invalidate(mySnsLinkStatusProvider),
         child: ListView(
@@ -84,16 +88,29 @@ class _SnsLinkPageState extends ConsumerState<SnsLinkPage>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    Text('連携について',
-                        style: Theme.of(context).textTheme.titleSmall),
-                    const SizedBox(height: 8),
+                    Row(
+                      children: <Widget>[
+                        Icon(Icons.verified_user_outlined,
+                            size: 18,
+                            color: Theme.of(context).colorScheme.primary),
+                        const SizedBox(width: 8),
+                        Text(
+                          '連携について',
+                          style: Theme.of(context)
+                              .textTheme
+                              .titleSmall
+                              ?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
                     const Text(
                       '・インサイトは案件の条件判定にのみ使われ、数値そのものは'
                       'あなたを含む誰にも表示されません。\n'
                       '・Instagram はビジネス／クリエイターアカウントで、'
                       'Facebook ページとの連携が必要です。\n'
                       '・データは1日1回自動で更新されます。',
-                      style: TextStyle(fontSize: 13, height: 1.6),
+                      style: TextStyle(fontSize: 13, height: 1.7),
                     ),
                   ],
                 ),
@@ -110,10 +127,11 @@ class _SnsLinkPageState extends ConsumerState<SnsLinkPage>
                 child: Column(
                   children: <Widget>[
                     const Text('連携状態を取得できませんでした。'),
-                    const SizedBox(height: 8),
-                    FilledButton(
+                    const SizedBox(height: 12),
+                    FilledButton.icon(
+                      icon: const Icon(Icons.refresh),
                       onPressed: () => ref.invalidate(mySnsLinkStatusProvider),
-                      child: const Text('再読み込み'),
+                      label: const Text('再読み込み'),
                     ),
                   ],
                 ),
@@ -129,14 +147,19 @@ class _SnsLinkPageState extends ConsumerState<SnsLinkPage>
                 return Column(
                   children: <Widget>[
                     _PlatformTile(
-                      icon: Icons.camera_alt_outlined,
+                      avatar: const _PlatformAvatar(
+                        icon: Icons.camera_alt_outlined,
+                        gradient: AppTheme.brandGradient,
+                      ),
                       name: 'Instagram',
                       status: instagram,
                       starting: _starting,
                       onPressed: _startLink,
                     ),
+                    const SizedBox(height: 8),
                     const _ComingSoonTile(
                         icon: Icons.music_note_outlined, name: 'TikTok'),
+                    const SizedBox(height: 8),
                     const _ComingSoonTile(
                         icon: Icons.play_circle_outline, name: 'YouTube'),
                   ],
@@ -150,16 +173,43 @@ class _SnsLinkPageState extends ConsumerState<SnsLinkPage>
   }
 }
 
+/// SNS アイコンの丸型アバター。
+class _PlatformAvatar extends StatelessWidget {
+  const _PlatformAvatar({
+    required this.icon,
+    this.gradient,
+    this.color,
+  });
+
+  final IconData icon;
+  final Gradient? gradient;
+  final Color? color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 44,
+      height: 44,
+      decoration: BoxDecoration(
+        gradient: gradient,
+        color: color,
+        shape: BoxShape.circle,
+      ),
+      child: Icon(icon, color: Colors.white, size: 24),
+    );
+  }
+}
+
 class _PlatformTile extends StatelessWidget {
   const _PlatformTile({
-    required this.icon,
+    required this.avatar,
     required this.name,
     required this.status,
     required this.starting,
     required this.onPressed,
   });
 
-  final IconData icon;
+  final Widget avatar;
   final String name;
   final SnsLinkStatus? status;
   final bool starting;
@@ -176,28 +226,88 @@ class _PlatformTile extends StatelessWidget {
       subtitle = '再認可が必要です。もう一度連携してください。';
     } else if (s.lastSyncedAt != null) {
       subtitle =
-          '連携中 ・ 最終同期 ${DateFormat('M月d日 HH:mm').format(s.lastSyncedAt!.toLocal())}';
+          '最終同期 ${DateFormat('M月d日 HH:mm').format(s.lastSyncedAt!.toLocal())}';
     } else {
-      subtitle = '連携中 ・ 初回データ取得中（数分かかることがあります）';
+      subtitle = '初回データ取得中（数分かかることがあります）';
     }
     return Card(
-      child: ListTile(
-        leading: Icon(icon, size: 32),
-        title: Text(name),
-        subtitle: Text(subtitle, style: const TextStyle(fontSize: 12)),
-        trailing: starting
-            ? const SizedBox(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          children: <Widget>[
+            avatar,
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Row(
+                    children: <Widget>[
+                      Text(
+                        name,
+                        style: const TextStyle(
+                            fontSize: 15, fontWeight: FontWeight.w700),
+                      ),
+                      if (linked && !s.needsReauth) ...<Widget>[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color:
+                                AppTheme.successGreen.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: const Text(
+                            '連携中',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: AppTheme.successGreen,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                        fontSize: 12, color: Colors.grey.shade600),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            if (starting)
+              const SizedBox(
                 height: 20,
                 width: 20,
                 child: CircularProgressIndicator(strokeWidth: 2),
               )
-            : (s?.needsReauth ?? false)
-                ? FilledButton.tonal(
-                    onPressed: onPressed, child: const Text('再連携'))
-                : linked
-                    ? const Icon(Icons.check_circle, color: Colors.green)
-                    : FilledButton(
-                        onPressed: onPressed, child: const Text('連携する')),
+            else if (s?.needsReauth ?? false)
+              FilledButton.tonal(
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size(64, 40),
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                ),
+                onPressed: onPressed,
+                child: const Text('再連携'),
+              )
+            else if (linked)
+              const Icon(Icons.check_circle, color: AppTheme.successGreen)
+            else
+              FilledButton(
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size(64, 40),
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                ),
+                onPressed: onPressed,
+                child: const Text('連携する'),
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -212,11 +322,35 @@ class _ComingSoonTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
-      child: ListTile(
-        enabled: false,
-        leading: Icon(icon, size: 32),
-        title: Text(name),
-        subtitle: const Text('今後対応予定', style: TextStyle(fontSize: 12)),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          children: <Widget>[
+            _PlatformAvatar(icon: icon, color: Colors.grey.shade400),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    name,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.grey.shade500,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '今後対応予定',
+                    style: TextStyle(
+                        fontSize: 12, color: Colors.grey.shade500),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

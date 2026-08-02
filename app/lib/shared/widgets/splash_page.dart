@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/theme/app_theme.dart';
 import '../../features/auth/data/profile_repository.dart';
 import '../../features/auth/domain/registration_step.dart';
 
@@ -21,15 +22,29 @@ class SplashPage extends ConsumerWidget {
             ? Column(
                 mainAxisSize: MainAxisSize.min,
                 children: <Widget>[
-                  const Text('通信に失敗しました。'),
+                  Icon(Icons.wifi_off, size: 48, color: Colors.grey.shade400),
                   const SizedBox(height: 12),
-                  FilledButton(
+                  const Text('通信に失敗しました。'),
+                  const SizedBox(height: 16),
+                  FilledButton.icon(
+                    icon: const Icon(Icons.refresh),
                     onPressed: () => ref.invalidate(registrationStepProvider),
-                    child: const Text('再試行'),
+                    label: const Text('再試行'),
                   ),
                 ],
               )
-            : const CircularProgressIndicator(),
+            : const Column(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  BrandMark(size: 88),
+                  SizedBox(height: 32),
+                  SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(strokeWidth: 2.5),
+                  ),
+                ],
+              ),
       ),
     );
   }

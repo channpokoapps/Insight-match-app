@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../core/platform/platform_capability.dart';
 import '../../../core/router/app_router.dart';
+import '../../../shared/widgets/app_bottom_nav.dart';
 import '../../../shared/widgets/install_prompt.dart';
 
 /// PR依頼者のホーム画面。
@@ -27,32 +27,40 @@ class ClientHomePage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final ThemeData theme = Theme.of(context);
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('案件の管理'),
-        actions: <Widget>[
-          IconButton(
-            icon: const Icon(Icons.settings_outlined),
-            tooltip: '設定',
-            onPressed: () => context.push(AppRoutes.settings),
-          ),
-        ],
-      ),
+      appBar: AppBar(title: const Text('案件の管理')),
+      bottomNavigationBar: const AppBottomNav(current: AppRoutes.clientHome),
       body: Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
-              const Icon(Icons.campaign_outlined, size: 56),
-              const SizedBox(height: 16),
+              Container(
+                width: 88,
+                height: 88,
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primary.withValues(alpha: 0.08),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.campaign_outlined,
+                  size: 44,
+                  color: theme.colorScheme.primary,
+                ),
+              ),
+              const SizedBox(height: 20),
               Text(
                 'まだ案件がありません',
-                style: Theme.of(context).textTheme.titleLarge,
+                style: theme.textTheme.titleLarge
+                    ?.copyWith(fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: 8),
-              const Text(
+              Text(
                 'インサイト条件を設定して案件を作成すると、\n条件に合う投稿者を募集できます。',
+                style: theme.textTheme.bodyMedium
+                    ?.copyWith(height: 1.6, color: Colors.grey.shade600),
                 textAlign: TextAlign.center,
               ),
             ],
