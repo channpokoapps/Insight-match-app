@@ -8,3 +8,8 @@ env/*.json
 
 # OS
 .DS_Store
+
+# Edge Functions のローカル用シークレット
+supabase/functions/.env.local
+# Supabase CLI の一時ファイル
+supabase/.temp/

@@ -7,7 +7,8 @@
 
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
-export function createServiceClient(): SupabaseClient {
+// deno-lint-ignore no-explicit-any
+export function createServiceClient(): SupabaseClient<any, "private", any> {
     const url = Deno.env.get("SUPABASE_URL");
     const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     if (!url || !key) {

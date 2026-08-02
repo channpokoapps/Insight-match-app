@@ -51,3 +51,8 @@ enabled = false
 [edge_runtime]
 enabled = true
 policy = "oneshot"
+
+# meta-oauth は Meta からのリダイレクト（JWT なしの GET）を受けるため、
+# ゲートウェイの JWT 検証を無効にし、認可開始（POST）はコード内で JWT を検証する。
+[functions.meta-oauth]
+verify_jwt = false

@@ -7,6 +7,7 @@
 //   - 失敗は指数バックオフで最大5回まで再試行する（ADR-0004）
 
 import { createServiceClient, assertServiceRole, safeLog } from "../_shared/client.ts";
+import { decryptToken } from "../_shared/crypto.ts";
 
 const MAX_ATTEMPT = 5;
 const BACKOFF_MINUTES = [5, 15, 45, 120, 360];
@@ -229,24 +230,6 @@ async function fetchInstagramFollowers(accountId: string, token: string): Promis
   if (!res.ok) return null;
   const body = await res.json();
   return typeof body.followers_count === "number" ? body.followers_count : null;
-}
-
-// TODO(OI-17): 暗号化方式を確定してから実装する。
-async function decryptToken(encrypted: string): Promise<string> {
-  const keyRaw = Deno.env.get("TOKEN_ENCRYPTION_KEY");
-  if (!keyRaw) throw new Error("CONFIG_ERROR");
-  const raw = Uint8Array.from(atob(encrypted), (c) => c.charCodeAt(0));
-  const iv = raw.slice(0, 12);
-  const data = raw.slice(12);
-  const key = await crypto.subtle.importKey(
-    "raw",
-    Uint8Array.from(atob(keyRaw), (c) => c.charCodeAt(0)),
-    "AES-GCM",
-    false,
-    ["decrypt"],
-  );
-  const plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, data);
-  return new TextDecoder().decode(plain);
 }
 
 function classifyError(e: unknown): string {

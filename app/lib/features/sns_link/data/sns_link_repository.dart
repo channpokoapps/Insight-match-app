@@ -29,6 +29,37 @@ class SnsLinkRepository {
       throw failure;
     }
   }
+
+  /// Instagram の認可 URL を取得する（連携開始）。
+  ///
+  /// URL の発行と state の署名は Edge Function `meta-oauth` が行う。
+  /// 戻り値の URL を外部ブラウザで開くと、認可完了後に
+  /// サーバー側でトークンが暗号化保存される（トークンはアプリを経由しない。
+  /// 要件 9-4 X-3）。
+  Future<Uri> startInstagramLink() async {
+    try {
+      final FunctionResponse res = await _client.functions.invoke(
+        'meta-oauth',
+        body: <String, String>{'action': 'start'},
+      );
+      final Map<String, dynamic> body =
+          Map<String, dynamic>.from(res.data as Map<dynamic, dynamic>);
+      final String? url = body['url'] as String?;
+      if (url == null || url.isEmpty) {
+        throw const AppFailure(
+          FailureKind.unknown,
+          '連携を開始できませんでした。時間をおいて再度お試しください。',
+        );
+      }
+      return Uri.parse(url);
+    } on AppFailure {
+      rethrow;
+    } on Object catch (e, s) {
+      final AppFailure failure = AppFailure.from(e);
+      AppLogger.error('sns_link.start_failed', failure.code, s);
+      throw failure;
+    }
+  }
 }
 
 final Provider<SnsLinkRepository> snsLinkRepositoryProvider =

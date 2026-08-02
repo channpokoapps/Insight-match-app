@@ -4,7 +4,8 @@
         "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.45.4"
     },
     "tasks": {
-        "check": "deno check sync-insights/index.ts sync-worker/index.ts",
+        "check": "deno check sync-insights/index.ts sync-worker/index.ts meta-oauth/index.ts",
+        "test": "deno test --allow-env=TOKEN_ENCRYPTION_KEY _shared/",
         "fmt": "deno fmt",
         "lint": "deno lint"
     },
