@@ -120,14 +120,33 @@ gh secret set FLUTTER_WEB_FIREBASE_CONFIG -R channpokoapps/Insight-match-app < e
    プレビューがデプロイされ、PR のコメントに URL が出る。その URL を控える。
 2. **Supabase**: [ダッシュボード](https://supabase.com/dashboard) →
    プロジェクト → Authentication → **URL Configuration → Redirect URLs** に
-   `https://insight-match-2fbaa--preview-<ランダム>.web.app/**` を追加する。
+   **ワイルドカードで**追加する。
+
+   ```
+   https://insight-match-2fbaa--*.web.app/**
+   ```
+
+   Redirect URLs はホスト名部分にも `*` を使えるため、こう登録しておけば
+   チャンネルのランダム部分が変わっても登録し直さなくてよい。
+   実 URL（`https://insight-match-2fbaa--preview-<ランダム>.web.app/**`）を
+   個別に足しても動くが、失効のたびに再登録が必要になる。
 3. **Google ログイン**: [GCP コンソール → 認証情報](https://console.cloud.google.com/apis/credentials) →
    ウェブアプリケーションの OAuth クライアント → **承認済みの JavaScript 生成元**に
    プレビューの URL（パスなし）を追加する（ワイルドカード不可のため実 URL を登録）。
+   ※ 現在の実装（`signInWithOAuth` によるリダイレクト方式）では Google 側は
+   Supabase の callback URL しか見ないため必須ではないが、将来 Google の
+   JS SDK を使う場合に備えて登録しておく。
+
+> **この登録を飛ばすと、ログインは「無言で失敗」する。**
+> `redirect_to` が Redirect URLs に一致しないと、Supabase はエラーを返さず
+> **Site URL（本番 URL）へフォールバック**して戻す。PKCE の `code_verifier` は
+> ログインを開始したオリジンの localStorage にしかないので、別オリジンで
+> 受け取った `?code=` は交換に失敗し、セッションが張られないままログイン画面に戻る。
+> 症状は「**Google で続行 → アカウントを選択 → 何も起きない／登録画面に進まない**」。
 
 > **プレビューチャンネルは 30 日間デプロイが無いと失効し、URL のランダム部分が
-> 変わる**。その場合はこの節の 2〜3 をやり直す。月 1 回でも PR を作っていれば
-> 期限は延び続けるので、通常は一度きりの作業。
+> 変わる**。手順 2 をワイルドカードで登録していれば影響を受けない。
+> 実 URL で登録した場合は 2〜3 をやり直す。
 
 ---
 

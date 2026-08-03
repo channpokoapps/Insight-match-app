@@ -243,6 +243,7 @@ jobs:
               lines.push(`- プレビューは**固定チャンネル**です（複数 PR で共有・後勝ち）。最後にデプロイした PR: #${pr_number}`);
               lines.push('- push すると同じ URL に更新されます。反映されないときはブラウザを再読み込みしてください。');
               lines.push('- Android の実機で確認したいときは、この PR に `/apk` とコメントすると App Distribution に配布されます。');
+              lines.push('- ログイン（特に Google）を試すには、この URL が Supabase の **Redirect URLs** に登録されている必要があります。アカウントを選んでも画面が進まないときはこれが原因です（`docs/manual_setup/github_automation.md` §4）。');
             } else if (process.env.CONFIGURED === 'false') {
               lines.push('⚙️ デプロイ用の Secrets / Variables が未設定のため、プレビューをスキップしました。');
               lines.push('設定手順: `docs/manual_setup/github_automation.md` §2〜3');

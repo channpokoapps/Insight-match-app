@@ -61,6 +61,11 @@ class _SignInPageState extends ConsumerState<SignInPage> {
 
   @override
   Widget build(BuildContext context) {
+    // Google ログインからの復帰に失敗した場合、この画面に戻されるだけで
+    // 何のフィードバックも出ないため、コールバックの失敗もここで表示する。
+    final String? message =
+        _error ?? ref.watch(authCallbackFailureProvider)?.message;
+
     return Scaffold(
       body: SafeArea(
         child: Center(
@@ -122,9 +127,9 @@ class _SignInPageState extends ConsumerState<SignInPage> {
                     ),
                     onSubmitted: (_) => _submitting ? null : _signIn(),
                   ),
-                  if (_error != null) ...<Widget>[
+                  if (message != null) ...<Widget>[
                     const SizedBox(height: 12),
-                    ErrorNotice(message: _error!),
+                    ErrorNotice(message: message),
                   ],
                   const SizedBox(height: 24),
                   SubmitButton(
