@@ -131,9 +131,13 @@ jobs:
   preview:
     name: Web プレビュー
     needs: changes
+    # PR 番号は「コメントを書く」ためだけに必要なので、ここでは条件にしない。
+    # 条件に入れていたせいで、PR がマージ済み（`gh pr list` は open しか返さない）
+    # のブランチに追加 push しても**デプロイごとスキップ**され、プレビュー URL が
+    # 古いビルドのまま放置される事故が起きた。コメントできなくてもビルドの
+    # 反映だけは必ず行う（コメント側は pr_number が空なら自然にスキップされる）。
     if: >-
       needs.changes.outputs.app == 'true'
-      && needs.changes.outputs.pr_number != ''
       && needs.changes.outputs.configured == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
