@@ -7,13 +7,13 @@ class CampaignListItem {
     required this.id,
     required this.title,
     required this.storeName,
-    required this.rewardDescription,
     required this.rewardValueJpy,
     required this.applyEndAt,
     required this.postStartAt,
     required this.postEndAt,
     required this.isEligible,
     required this.hasApplied,
+    this.rewardDescription,
     this.genreId,
     this.prefectureId,
     this.cityId,
@@ -25,7 +25,7 @@ class CampaignListItem {
         id: json['id'] as String,
         title: json['title'] as String,
         storeName: json['store_name'] as String,
-        rewardDescription: json['reward_description'] as String,
+        rewardDescription: json['reward_description'] as String?,
         rewardValueJpy: json['reward_value_jpy'] as int,
         applyEndAt: DateTime.parse(json['apply_end_at'] as String),
         postStartAt: DateTime.parse(json['post_start_at'] as String),
@@ -41,7 +41,10 @@ class CampaignListItem {
   final String id;
   final String title;
   final String storeName;
-  final String rewardDescription;
+
+  /// 応募条件を満たさない場合、サーバは値を送らないため null になる。
+  final String? rewardDescription;
+
   final int rewardValueJpy;
   final DateTime applyEndAt;
   final DateTime postStartAt;

@@ -8,7 +8,7 @@ void main() {
     bool isEligible = true,
     bool hasApplied = false,
     DateTime? applyEndAt,
-    String rewardDescription = 'ドリンク1杯無料 + 謝礼3,000円',
+    String? rewardDescription = 'ドリンク1杯無料 + 謝礼3,000円',
   }) {
     final DateTime now = DateTime.now();
     return CampaignListItem(
@@ -40,13 +40,34 @@ void main() {
   });
 
   testWidgets('条件を満たさない案件は報酬内容を表示しない', (WidgetTester tester) async {
+    // サーバは条件未達の投稿者に reward_description を送らない(null)。
     await tester.pumpWidget(
-      wrap(CampaignCard(campaign: item(isEligible: false), onTap: () {})),
+      wrap(
+        CampaignCard(
+          campaign: item(isEligible: false, rewardDescription: null),
+          onTap: () {},
+        ),
+      ),
     );
 
     expect(find.text('ドリンク1杯無料 + 謝礼3,000円'), findsNothing);
     expect(find.text('応募条件を満たすと詳細が見られます'), findsOneWidget);
     expect(find.byIcon(Icons.lock_outline), findsOneWidget);
+  });
+
+  testWidgets('報酬内容が届いていない案件は条件充足でも伏せて表示する',
+      (WidgetTester tester) async {
+    // is_eligible と reward_description が万一食い違っても、非開示側に倒す。
+    await tester.pumpWidget(
+      wrap(
+        CampaignCard(
+          campaign: item(rewardDescription: null),
+          onTap: () {},
+        ),
+      ),
+    );
+
+    expect(find.text('応募条件を満たすと詳細が見られます'), findsOneWidget);
   });
 
   testWidgets('応募済みの案件はバッジを表示する', (WidgetTester tester) async {

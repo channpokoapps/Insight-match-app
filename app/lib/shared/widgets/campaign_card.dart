@@ -21,7 +21,8 @@ class CampaignCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
-    final bool masked = !campaign.isEligible;
+    final bool masked =
+        !campaign.isEligible || campaign.rewardDescription == null;
 
     return Card(
       clipBehavior: Clip.antiAlias,
@@ -81,7 +82,7 @@ class CampaignCard extends StatelessWidget {
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          campaign.rewardDescription,
+                          campaign.rewardDescription ?? '',
                           style: theme.textTheme.bodyMedium?.copyWith(
                             fontWeight: FontWeight.w600,
                             color: theme.colorScheme.primary,

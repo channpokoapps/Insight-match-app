@@ -334,7 +334,10 @@ components:
         title: { type: string }
         store_name: { type: string }
         genre_id: { type: integer, nullable: true }
-        reward_description: { type: string }
+        reward_description:
+          type: string
+          nullable: true
+          description: 応募条件を満たさない場合は null(値そのものを送らない)
         reward_value_jpy: { type: integer }
         prefecture_id: { type: integer, nullable: true }
         city_id: { type: integer, nullable: true }
