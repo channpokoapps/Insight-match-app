@@ -1,9 +1,11 @@
-# インフルエンサーマッチングアプリ
+# SNS Insight Matcher
 
 店舗（PR依頼者）と投稿者をマッチングするモバイルアプリ。
 
-**このアプリの中核は「インサイトを条件に使えるが、実数値は誰にも見えない」という一点です。**
+**このアプリの中核は「インサイト（SNS の閲覧数・フォロワー数などの実績データ）を
+応募条件に使えるが、実数値は誰にも見えない」という一点です。**
 コードを書く前に [AGENTS.md](AGENTS.md) を必ず読んでください。
+用語（インサイト、k-匿名性など）に迷ったら [docs/glossary.md](docs/glossary.md) を参照してください。
 
 ---
 
@@ -57,7 +59,8 @@
 ├── config/app_config.json     公開設定値（ストア URL・規約バージョン等）
 ├── env/                       接続情報テンプレート（*.example.json をコピーして使う）
 ├── firebase.json              Firebase Hosting（お試し Web 版）の設定
-├── .github/workflows/ci.yml   CI（flutter analyze・test / supabase test db）
+├── .github/workflows/         CI（ci.yml）のほか、PR 自動作成（auto-pr.yml）、
+│                              自動レビュー、プレビュー / 本番デプロイ、APK ビルド
 └── docs/
     ├── requirements/          要件定義書（全13章）
     ├── adr/                   アーキテクチャ決定記録
@@ -70,10 +73,11 @@
 
 ## 4. セットアップ
 
-前提：Flutter SDK 3.x / Docker Desktop / Supabase CLI / Node.js（Supabase CLI を npm で入れる場合）
+前提：Flutter SDK（stable 最新）/ Docker Desktop / Supabase CLI / Node.js（Supabase CLI を npm で入れる場合）。
+バージョンの詳細は [CONTRIBUTING.md](CONTRIBUTING.md) §1 を参照。
 
 ```powershell
-# 1. Supabase をローカルで起動
+# 1. Supabase をローカルで起動（Docker Desktop を先に起動しておく）
 supabase start
 
 # 2. マイグレーションとシードを適用
@@ -86,7 +90,11 @@ supabase test db
 cd app
 flutter pub get
 
-# 5. 環境変数を設定して起動（env/local.example.json をコピーして anon key を設定）
+# 5. 環境変数ファイルを作る（これを作らずに手順 6 を実行すると接続エラーで起動に失敗する）
+#    env/local.example.json をコピーして env/local.json を作り、
+#    手順 1 の `supabase start` が表示した API URL と anon key を書き込む
+
+# 6. 起動
 flutter run --dart-define-from-file=../env/local.json           # Android など
 flutter run -d chrome --dart-define-from-file=../env/local.json  # Web お試し版
 ```

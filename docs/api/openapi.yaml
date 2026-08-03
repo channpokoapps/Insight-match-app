@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
-  title: インフルエンサーマッチング API
-  version: 0.1.0
+  title: SNS Insight Matcher API
+  version: 0.2.0
   description: |
     Supabase PostgREST の RPC と Edge Functions のインターフェース定義。
 
@@ -207,6 +207,63 @@ paths:
                     last_synced_at: { type: string, format: date-time, nullable: true }
                     is_ready: { type: boolean }
 
+  /rest/v1/rpc/list_my_applications:
+    post:
+      summary: 自分の応募一覧を取得する（投稿者）
+      description: |
+        投稿者は `campaigns` に SELECT ポリシーを持たないため、
+        案件名や投稿期限を含めた一覧はこの RPC で組み立てて返す。
+      operationId: listMyApplications
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id: { type: string, format: uuid }
+                    campaign_id: { type: string, format: uuid }
+                    campaign_title: { type: string }
+                    status: { type: string }
+                    created_at: { type: string, format: date-time }
+                    chat_room_id: { type: string, format: uuid, nullable: true }
+                    post_end_at: { type: string, format: date-time }
+
+  /rest/v1/v_chat_messages:
+    get:
+      summary: チャットメッセージの参照（投稿者・PR依頼者共通）
+      description: |
+        チャットの参照はこのビュー経由に限る。`sender_id` は射影しない（AGENTS.md R-5）。
+        送信者は「自分か（is_own）」「PR依頼者側か（sender_is_client）」だけが分かる。
+      operationId: listChatMessages
+      parameters:
+        - in: query
+          name: room_id
+          schema: { type: string }
+          example: eq.00000000-0000-0000-0000-000000000000
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id: { type: string, format: uuid }
+                    room_id: { type: string, format: uuid }
+                    body: { type: string, nullable: true }
+                    image_path: { type: string, nullable: true }
+                    read_at: { type: string, format: date-time, nullable: true }
+                    created_at: { type: string, format: date-time }
+                    is_own: { type: boolean }
+                    sender_is_client: { type: boolean }
+                    counterpart_alias_no: { type: integer, description: 相手の案件内連番 }
+
   /rest/v1/v_applications_for_client:
     get:
       summary: 自案件の応募者一覧（PR依頼者）
@@ -334,7 +391,10 @@ components:
         title: { type: string }
         store_name: { type: string }
         genre_id: { type: integer, nullable: true }
-        reward_description: { type: string }
+        reward_description:
+          type: string
+          nullable: true
+          description: 応募条件を満たさない場合は null(値そのものを送らない)
         reward_value_jpy: { type: integer }
         prefecture_id: { type: integer, nullable: true }
         city_id: { type: integer, nullable: true }

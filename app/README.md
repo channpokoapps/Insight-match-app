@@ -53,4 +53,18 @@ lib/
 - **アクション UI は `kIsWeb` を直接見ない。** `PlatformCapability.isAvailable()` で判定し、
   不可なら `showInstallPromptSheet()` でインストール導線を表示する。
 
+## 依存パッケージについて
+
+`pubspec.yaml` に宣言済みだが**まだコードから使われていない**パッケージがある。
+将来のタスク（[../docs/backlog.md](../docs/backlog.md)）で使う予定のため残している。
+
+| パッケージ | 使用予定 |
+|---|---|
+| `fl_chart` | 成果レポートのヒストグラム表示（T-153） |
+| `cached_network_image` | 案件画像の表示（T-111 以降） |
+| `geolocator` | 現在地からの距離検索（T-120 / FR-SRCH-05） |
+| `image_picker` | 案件画像アップロード・チャット画像送信（T-111 / T-141） |
+| `firebase_messaging` | プッシュ通知（T-160） |
+| `mocktail` | Repository のモックを使ったテスト |
+
 詳細は [../AGENTS.md](../AGENTS.md) を参照してください。

@@ -1,7 +1,7 @@
 # ローカル開発用の Supabase 設定
 # 本番の設定はダッシュボードで管理する。ここに秘密情報を書かないこと。
 
-project_id = "app2"
+project_id = "insight-match-app"
 
 [api]
 enabled = true
@@ -34,7 +34,8 @@ file_size_limit = "10MiB"
 [auth]
 enabled = true
 site_url = "http://localhost:3000"
-additional_redirect_urls = ["io.supabase.app2://login-callback/"]
+# アプリのディープリンク(AndroidManifest.xml / meta-oauth の APP_RETURN_URL と揃える)
+additional_redirect_urls = ["insightmatch://sns-link"]
 jwt_expiry = 3600
 enable_refresh_token_rotation = true
 refresh_token_reuse_interval = 10

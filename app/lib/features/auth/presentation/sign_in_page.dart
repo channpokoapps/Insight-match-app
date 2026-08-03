@@ -6,6 +6,7 @@ import '../../../core/error/app_failure.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/widgets/error_notice.dart';
+import '../../../shared/widgets/submit_button.dart';
 import '../data/auth_repository.dart';
 
 /// ログイン画面。
@@ -126,15 +127,10 @@ class _SignInPageState extends ConsumerState<SignInPage> {
                     ErrorNotice(message: _error!),
                   ],
                   const SizedBox(height: 24),
-                  FilledButton(
-                    onPressed: _submitting ? null : _signIn,
-                    child: _submitting
-                        ? const SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Text('ログイン'),
+                  SubmitButton(
+                    label: 'ログイン',
+                    submitting: _submitting,
+                    onPressed: _signIn,
                   ),
                   const SizedBox(height: 16),
                   Row(

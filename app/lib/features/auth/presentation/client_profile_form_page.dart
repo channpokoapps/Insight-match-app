@@ -3,8 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/error/app_failure.dart';
 import '../../../core/masters/master_repository.dart';
-import '../data/auth_repository.dart';
+import '../../../shared/widgets/submit_button.dart';
 import '../data/profile_repository.dart';
+import '../domain/auth_validators.dart';
 
 /// PR依頼者（店舗・企業）のプロフィール登録画面。
 ///
@@ -180,15 +181,10 @@ class _ClientProfileFormPageState extends ConsumerState<ClientProfileFormPage> {
                     ),
                   ],
                   const SizedBox(height: 24),
-                  FilledButton(
-                    onPressed: _submitting ? null : _save,
-                    child: _submitting
-                        ? const SizedBox(
-                            height: 18,
-                            width: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Text('登録してはじめる'),
+                  SubmitButton(
+                    label: '登録してはじめる',
+                    submitting: _submitting,
+                    onPressed: _save,
                   ),
                 ],
               ),

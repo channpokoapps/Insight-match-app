@@ -4,15 +4,17 @@
 
 | ツール | バージョン | 用途 |
 |---|---|---|
-| Flutter SDK | 3.22 以上 | アプリ本体 |
+| Flutter SDK | stable 最新（CI も stable チャンネルを使用） | アプリ本体 |
 | Dart | Flutter 同梱 | — |
 | Android Studio | 最新安定版 | Android SDK / エミュレータ |
 | Docker Desktop | 最新 | Supabase ローカル環境 |
-| Supabase CLI | 1.180 以上 | DB・Edge Functions |
-| Deno | 1.4x | Edge Functions のローカル実行・型チェック |
-| Git | 2.4x | — |
+| Supabase CLI | 最新（CI は latest を使用） | DB・Edge Functions |
+| Deno | 2.x（CI は v2.x を使用） | Edge Functions のローカル実行・型チェック |
+| Git | 2.40 以上 | — |
 
-### インストール（Windows / PowerShell）
+### インストール
+
+Windows（PowerShell）の場合：
 
 ```powershell
 # Flutter（推奨: 公式手順で zip 展開して PATH を通す）
@@ -27,11 +29,25 @@ supabase --version
 irm https://deno.land/install.ps1 | iex
 ```
 
+macOS / Linux の場合：
+
+```bash
+# Flutter は公式手順（https://docs.flutter.dev/get-started/install）に従う
+flutter --version
+flutter doctor
+
+# Supabase CLI（Homebrew の例。npm install -g supabase でも可）
+brew install supabase/tap/supabase
+
+# Deno
+curl -fsSL https://deno.land/install.sh | sh
+```
+
 ## 2. 初回セットアップ
 
 ```powershell
-git clone <repository-url> insight-match-app
-cd app2
+git clone <repository-url>
+cd Insight-match-app
 
 # --- Supabase ---
 supabase start          # 初回は Docker イメージの取得に時間がかかる
@@ -84,7 +100,10 @@ TOKEN_ENCRYPTION_KEY=<base64 の 32 バイト鍵>
 
 ```powershell
 # 1. ブランチを作る
-git switch -c feat/FR-CMP-03-campaign-create
+#    Claude(Cowork / クラウドセッション)経由の作業は claude/<内容を表すslug>
+#    （push すると auto-pr.yml が main 向け PR を自動作成する。AGENTS.md §6 参照）
+#    人間が手元で作業する場合は feat/ など type プレフィックスでもよい
+git switch -c claude/campaign-create-form
 
 # 2. DB を変える場合はマイグレーションを追加
 supabase migration new add_something
@@ -107,7 +126,7 @@ git commit -m "feat(campaign): 案件作成フォームを追加 (FR-CMP-03)"
 - `public` に新しいテーブルを作るときは、**同じマイグレーション内**で `enable row level security` とポリシーを書く。
 - `private` スキーマのオブジェクトに `anon` / `authenticated` の権限を付けない。
 - 既存マイグレーションを書き換えない（適用済み環境と乖離する）。修正は新しいファイルで行う。
-- ファイル名は `supabase migration new` が付ける連番（タイムスタンプ）に従う。初期構築分のみ `0001_`〜`0006_` の固定連番を使っている。
+- ファイル名は `NNNN_snake_case.sql` の**固定連番**（例: `0004_rls_policies.sql`）。既存の最大番号 +1 を使う（AGENTS.md §2）。`supabase migration new` が付けるタイムスタンプ名は使わず、生成後にリネームする。
 
 ### モデルの書き方
 

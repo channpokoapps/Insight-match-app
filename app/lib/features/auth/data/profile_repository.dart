@@ -207,8 +207,6 @@ class ProfileRepository {
     }
     return userId;
   }
-
-  Future<void> signOut() => _client.auth.signOut();
 }
 
 final Provider<ProfileRepository> profileRepositoryProvider =

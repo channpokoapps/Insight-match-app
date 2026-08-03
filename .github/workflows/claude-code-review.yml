@@ -43,6 +43,11 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # このリポジトリの標準フローでは auto-pr.yml が GITHUB_TOKEN で PR を
+          # 自動作成するため、pull_request イベントのアクターが github-actions[bot]
+          # になる。claude-code-action は allowed_bots に登録のない bot 起動を
+          # 拒否する仕様のため、これがないと自動作成 PR のレビューが必ず失敗する。
+          allowed_bots: 'github-actions,github-actions[bot]'
           plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'
           plugins: 'code-review@claude-code-plugins'
           # --comment を付けないとレビュー結果が Actions のログに出るだけで

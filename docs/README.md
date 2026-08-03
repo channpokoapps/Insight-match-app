@@ -9,7 +9,7 @@
 | 2 | [02_system_overview.md](requirements/02_system_overview.md) | システム全体像、コンポーネント構成、インサイト非開示アーキテクチャ原則 | 作成済 |
 | 3 | [03_roles_and_permissions.md](requirements/03_roles_and_permissions.md) | ロール定義、権限マトリクス、アカウント状態遷移 | 作成済 |
 | 4 | [04_assumptions_and_constraints.md](requirements/04_assumptions_and_constraints.md) | 前提条件・制約（SNS API／法規制／体制／スコープ） | 作成済 |
-| 5 | [05_functional_requirements.md](requirements/05_functional_requirements.md) | 機能要件一覧（機能ID・優先度 Must/Should/Could、全118件） | 作成済 |
+| 5 | [05_functional_requirements.md](requirements/05_functional_requirements.md) | 機能要件一覧（機能ID・優先度 Must/Should/Could、全119件） | 作成済 |
 | 6 | [06_screens.md](requirements/06_screens.md) | 画面一覧・画面遷移図（ロール別）、モザイク表示仕様、レポートUI案 | 作成済 |
 | 7 | [07_usecases.md](requirements/07_usecases.md) | 主要ユースケース（シーケンス図 10 本・状態遷移図 2 本） | 作成済 |
 | 8 | [08_data_model.md](requirements/08_data_model.md) | データモデル（ER図・テーブル定義、public / private スキーマ分離） | 作成済 |
@@ -28,6 +28,7 @@
 | [backlog.md](backlog.md) | 実装タスク（T-xxx）。機能要件をリリース0／リリース1に分けて着手順に並べたもの |
 | [poc_guide.md](poc_guide.md) | **PoC の回し方**。スマホだけで「Issue → Claude が実装 → プレビュー確認 → マージ → 本番反映」のループを回す手順 |
 | [api/openapi.yaml](api/openapi.yaml) | RPC・Edge Functions のインターフェース定義 |
+| [manual_setup/](manual_setup/README.md) | **人間の手作業が必要な外部サービス設定**（アカウント、Meta 審査、Supabase 本番、GCP/Firebase、GitHub 連携）の手順書一式 |
 
 ## アーキテクチャ決定記録（ADR）
 
@@ -39,6 +40,7 @@
 | 0003 | [インサイト非開示を3層で担保する](adr/0003-insight-non-disclosure.md) |
 | 0004 | [日次バッチを pg_cron + Edge Function で実行する](adr/0004-daily-batch-pg-cron.md) |
 | 0005 | [PR依頼者に見せる識別子は案件内連番とする](adr/0005-anonymous-alias.md) |
+| 0006 | [SNS トークンは AES-256-GCM + Supabase Secrets で暗号化する](adr/0006-token-encryption.md) |
 
 ## リポジトリ内の関連ファイル
 

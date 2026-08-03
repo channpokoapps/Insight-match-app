@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/app_theme.dart';
 import '../../features/auth/data/profile_repository.dart';
 import '../../features/auth/domain/registration_step.dart';
+import 'retry_notice.dart';
 
 /// 起動直後・登録段階の判定中に表示するスプラッシュ画面。
 ///
@@ -19,19 +20,10 @@ class SplashPage extends ConsumerWidget {
     return Scaffold(
       body: Center(
         child: registration.hasError
-            ? Column(
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  Icon(Icons.wifi_off, size: 48, color: Colors.grey.shade400),
-                  const SizedBox(height: 12),
-                  const Text('通信に失敗しました。'),
-                  const SizedBox(height: 16),
-                  FilledButton.icon(
-                    icon: const Icon(Icons.refresh),
-                    onPressed: () => ref.invalidate(registrationStepProvider),
-                    label: const Text('再試行'),
-                  ),
-                ],
+            ? RetryNotice(
+                message: '通信に失敗しました。',
+                buttonLabel: '再試行',
+                onRetry: () => ref.invalidate(registrationStepProvider),
               )
             : const Column(
                 mainAxisSize: MainAxisSize.min,

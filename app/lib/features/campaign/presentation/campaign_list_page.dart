@@ -7,6 +7,7 @@ import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/widgets/app_bottom_nav.dart';
 import '../../../shared/widgets/campaign_card.dart';
+import '../../../shared/widgets/retry_notice.dart';
 import '../../sns_link/data/sns_link_repository.dart';
 import '../../sns_link/domain/sns_link_status.dart';
 import '../data/campaign_repository.dart';
@@ -60,24 +61,9 @@ class _CampaignListPageState extends ConsumerState<CampaignListPage> {
       bottomNavigationBar: const AppBottomNav(current: AppRoutes.campaignList),
       body: campaigns.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (Object error, StackTrace _) => Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                Icon(Icons.wifi_off, size: 48, color: Colors.grey.shade400),
-                const SizedBox(height: 12),
-                const Text('案件を取得できませんでした。'),
-                const SizedBox(height: 16),
-                FilledButton.icon(
-                  icon: const Icon(Icons.refresh),
-                  onPressed: () => ref.invalidate(campaignListProvider(query)),
-                  label: const Text('再読み込み'),
-                ),
-              ],
-            ),
-          ),
+        error: (Object error, StackTrace _) => RetryNotice(
+          message: '案件を取得できませんでした。',
+          onRetry: () => ref.invalidate(campaignListProvider(query)),
         ),
         data: (List<CampaignListItem> items) {
           final List<Widget> headers = <Widget>[

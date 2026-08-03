@@ -87,7 +87,7 @@
 | 状態管理 | `flutter_riverpod` | コンパイル時の依存解決、テスト容易性 |
 | ルーティング | `go_router` | 認証状態に応じたリダイレクトを宣言的に書ける |
 | Supabase 連携 | `supabase_flutter` | 公式 |
-| モデル生成 | `freezed` + `json_serializable` | イミュータブルなモデル、手書きミスの排除 |
+| モデル | 手書きの `fromJson`（コード生成なし） | 2026-08 決定。`freezed` / `build_runner` は使わない（AGENTS.md §3 参照）。生成手順が不要になり、環境構築とレビューが単純になる |
 | グラフ | `fl_chart` | ヒストグラム描画 |
 | 位置情報 | `geolocator` | 現在地からの距離検索 |
 | 画像 | `image_picker`, `cached_network_image` | |
@@ -133,7 +133,7 @@
 | Supabase Free プランはプロジェクト未使用時に一時停止される | 開発の中断、デモ時の障害 | 開発中は定期的にアクセスするか、早めに Pro へ移行 |
 | Supabase の Edge Function には実行時間の上限がある | 日次バッチが完走しない | ディスパッチャ＋ワーカー方式でチャンク分割（9-7） |
 | Flutter Web は管理画面用途では初回ロードが重い | 運営の使い勝手 | 初期は Supabase Studio で代替する案もある（`OI-15`） |
-| Dart 人材の確保 | 開発体制 | GitHub Copilot 活用が前提のため影響は限定的 |
+| Dart 人材の確保 | 開発体制 | Claude Code などの AI コーディング支援の活用が前提のため影響は限定的 |
 | BaaS へのロックイン | 将来の移行コスト | 素の PostgreSQL を使い、Supabase 固有機能への依存を最小化（RLS・RPC は標準機能） |
 
 ---

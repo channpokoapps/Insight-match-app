@@ -11,5 +11,6 @@ env/*.json
 
 # Edge Functions のローカル用シークレット
 supabase/functions/.env.local
-# Supabase CLI の一時ファイル
+# Supabase CLI の一時ファイル（linked-project 等の実プロジェクト識別子を含むためコミットしない）
 supabase/.temp/
+supabase/.branches/

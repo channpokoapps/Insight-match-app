@@ -4,23 +4,17 @@ import 'package:intl/intl.dart';
 
 import '../../../core/error/app_failure.dart';
 import '../../../core/masters/master_repository.dart';
+import '../../../shared/widgets/submit_button.dart';
 import '../data/profile_repository.dart';
+import '../domain/auth_validators.dart';
 
 /// 投稿者（creator）のプロフィール登録画面。
 ///
-/// 18 歳未満は登録できない（OI-08）。氏名・生年月日は本人確認と
-/// 年齢判定のためだけに使い、PR依頼者には一切表示されない（AGENTS.md R-5）。
+/// 18 歳未満は登録できない（OI-08、判定は [isOldEnough]）。氏名・生年月日は
+/// 本人確認と年齢判定のためだけに使い、PR依頼者には一切表示されない
+/// （AGENTS.md R-5）。
 class CreatorProfileFormPage extends ConsumerStatefulWidget {
   const CreatorProfileFormPage({super.key});
-
-  /// 登録に必要な最低年齢（OI-08）。
-  static const int MIN_AGE = 18;
-
-  /// [birthDate] 時点の年齢が [MIN_AGE] 以上かどうか。
-  static bool isOldEnough(DateTime birthDate, DateTime now) {
-    final DateTime threshold = DateTime(now.year - MIN_AGE, now.month, now.day);
-    return !birthDate.isAfter(threshold);
-  }
 
   @override
   ConsumerState<CreatorProfileFormPage> createState() =>
@@ -69,9 +63,9 @@ class _CreatorProfileFormPageState
       setState(() => _error = '生年月日を選択してください。');
       return;
     }
-    if (!CreatorProfileFormPage.isOldEnough(birthDate, DateTime.now())) {
+    if (!isOldEnough(birthDate, DateTime.now())) {
       setState(
-          () => _error = '${CreatorProfileFormPage.MIN_AGE} 歳未満の方はご登録いただけません。');
+          () => _error = '$MIN_AGE 歳未満の方はご登録いただけません。');
       return;
     }
     setState(() {
@@ -127,7 +121,7 @@ class _CreatorProfileFormPageState
                       decoration: const InputDecoration(
                         labelText: '生年月日',
                         helperText:
-                            '${CreatorProfileFormPage.MIN_AGE} 歳以上の方のみ登録できます',
+                            '$MIN_AGE 歳以上の方のみ登録できます',
                         suffixIcon: Icon(Icons.calendar_today_outlined),
                       ),
                       child: Text(
@@ -193,15 +187,10 @@ class _CreatorProfileFormPageState
                     ),
                   ],
                   const SizedBox(height: 24),
-                  FilledButton(
-                    onPressed: _submitting ? null : _save,
-                    child: _submitting
-                        ? const SizedBox(
-                            height: 18,
-                            width: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Text('登録してはじめる'),
+                  SubmitButton(
+                    label: '登録してはじめる',
+                    submitting: _submitting,
+                    onPressed: _save,
                   ),
                 ],
               ),
