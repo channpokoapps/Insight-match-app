@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/error/app_failure.dart';
 import '../../../core/platform/platform_capability.dart';
 import '../../../shared/widgets/install_prompt.dart';
+import '../../../shared/widgets/retry_notice.dart';
+import '../../../shared/widgets/submit_button.dart';
 import '../data/campaign_repository.dart';
 import '../domain/campaign.dart';
 
@@ -34,22 +36,9 @@ class CampaignDetailPage extends ConsumerWidget {
       ),
       error: (Object e, StackTrace _) => Scaffold(
         appBar: AppBar(title: const Text('案件詳細')),
-        body: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              Icon(Icons.wifi_off, size: 48, color: Colors.grey.shade400),
-              const SizedBox(height: 12),
-              const Text('案件を取得できませんでした。'),
-              const SizedBox(height: 16),
-              FilledButton.icon(
-                icon: const Icon(Icons.refresh),
-                onPressed: () =>
-                    ref.invalidate(campaignDetailProvider(campaignId)),
-                label: const Text('再読み込み'),
-              ),
-            ],
-          ),
+        body: RetryNotice(
+          message: '案件を取得できませんでした。',
+          onRetry: () => ref.invalidate(campaignDetailProvider(campaignId)),
         ),
       ),
       data: (CampaignDetail campaign) => _Body(campaign: campaign),
@@ -119,15 +108,10 @@ class _BodyState extends ConsumerState<_Body> {
               child: SafeArea(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-                  child: FilledButton(
-                    onPressed: _submitting ? null : _apply,
-                    child: _submitting
-                        ? const SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Text('この案件に応募する'),
+                  child: SubmitButton(
+                    label: 'この案件に応募する',
+                    submitting: _submitting,
+                    onPressed: _apply,
                   ),
                 ),
               ),
@@ -196,19 +180,19 @@ class _BodyState extends ConsumerState<_Body> {
                 ),
               )
             else ...<Widget>[
-              _SectionCard(
+              _DetailSectionCard(
                 icon: Icons.card_giftcard,
                 title: '報酬',
                 child: Text(body.rewardDescription,
                     style: theme.textTheme.bodyMedium?.copyWith(height: 1.6)),
               ),
-              _SectionCard(
+              _DetailSectionCard(
                 icon: Icons.edit_note,
                 title: '投稿してほしい内容',
                 child: Text(body.requiredContent,
                     style: theme.textTheme.bodyMedium?.copyWith(height: 1.6)),
               ),
-              _SectionCard(
+              _DetailSectionCard(
                 icon: Icons.tag,
                 title: '必須ハッシュタグ',
                 child: Wrap(
@@ -232,7 +216,7 @@ class _BodyState extends ConsumerState<_Body> {
                       .toList(),
                 ),
               ),
-              _SectionCard(
+              _DetailSectionCard(
                 icon: Icons.event_available,
                 title: '投稿期間',
                 child: Text(
@@ -253,9 +237,10 @@ class _BodyState extends ConsumerState<_Body> {
   }
 }
 
-/// アイコン付きのセクションカード。情報のまとまりを視覚的に区切る。
-class _SectionCard extends StatelessWidget {
-  const _SectionCard({
+/// アイコン + 見出し付きのセクションカード。情報のまとまりを視覚的に区切る。
+/// (settings_page.dart の `_SectionCard` はメニューのグルーピング用で別物)
+class _DetailSectionCard extends StatelessWidget {
+  const _DetailSectionCard({
     required this.icon,
     required this.title,
     required this.child,

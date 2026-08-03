@@ -1,6 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:insight_match/features/auth/data/auth_repository.dart';
-import 'package:insight_match/features/auth/presentation/creator_profile_form_page.dart';
+import 'package:insight_match/features/auth/domain/auth_validators.dart';
 
 void main() {
   group('isValidEmail', () {
@@ -38,17 +37,11 @@ void main() {
     final DateTime now = DateTime(2026, 8, 2);
 
     test('18 歳の誕生日当日は登録できる', () {
-      expect(
-        CreatorProfileFormPage.isOldEnough(DateTime(2008, 8, 2), now),
-        isTrue,
-      );
+      expect(isOldEnough(DateTime(2008, 8, 2), now), isTrue);
     });
 
     test('18 歳未満は登録できない', () {
-      expect(
-        CreatorProfileFormPage.isOldEnough(DateTime(2008, 8, 3), now),
-        isFalse,
-      );
+      expect(isOldEnough(DateTime(2008, 8, 3), now), isFalse);
     });
   });
 }

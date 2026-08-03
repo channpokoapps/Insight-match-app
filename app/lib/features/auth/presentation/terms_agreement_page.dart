@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/config/app_config.dart';
 import '../../../core/error/app_failure.dart';
+import '../../../shared/widgets/submit_button.dart';
 import '../data/profile_repository.dart';
 
 /// 利用規約・プライバシーポリシーへの同意画面。
@@ -124,15 +125,11 @@ class _TermsAgreementPageState extends ConsumerState<TermsAgreementPage> {
                     ),
                   ],
                   const SizedBox(height: 16),
-                  FilledButton(
-                    onPressed: _checked && !_submitting ? _agree : null,
-                    child: _submitting
-                        ? const SizedBox(
-                            height: 18,
-                            width: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Text('同意して進む'),
+                  SubmitButton(
+                    label: '同意して進む',
+                    submitting: _submitting,
+                    enabled: _checked,
+                    onPressed: _agree,
                   ),
                 ],
               ),

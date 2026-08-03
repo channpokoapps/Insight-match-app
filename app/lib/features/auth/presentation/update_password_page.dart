@@ -4,7 +4,9 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/error/app_failure.dart';
 import '../../../core/router/app_router.dart';
+import '../../../shared/widgets/submit_button.dart';
 import '../data/auth_repository.dart';
+import '../domain/auth_validators.dart';
 
 /// 新しいパスワードの設定画面。
 ///
@@ -101,15 +103,10 @@ class _UpdatePasswordPageState extends ConsumerState<UpdatePasswordPage> {
                     ),
                   ],
                   const SizedBox(height: 24),
-                  FilledButton(
-                    onPressed: _submitting ? null : _save,
-                    child: _submitting
-                        ? const SizedBox(
-                            height: 18,
-                            width: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Text('変更する'),
+                  SubmitButton(
+                    label: '変更する',
+                    submitting: _submitting,
+                    onPressed: _save,
                   ),
                 ],
               ),

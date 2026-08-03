@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/error/app_failure.dart';
+import '../../../shared/widgets/submit_button.dart';
 import '../data/auth_repository.dart';
+import '../domain/auth_validators.dart';
 
 /// パスワード再設定メールの送信画面。
 ///
@@ -110,16 +112,10 @@ class _PasswordResetPageState extends ConsumerState<PasswordResetPage> {
                           ),
                         ],
                         const SizedBox(height: 24),
-                        FilledButton(
-                          onPressed: _submitting ? null : _send,
-                          child: _submitting
-                              ? const SizedBox(
-                                  height: 18,
-                                  width: 18,
-                                  child:
-                                      CircularProgressIndicator(strokeWidth: 2),
-                                )
-                              : const Text('再設定メールを送る'),
+                        SubmitButton(
+                          label: '再設定メールを送る',
+                          submitting: _submitting,
+                          onPressed: _send,
                         ),
                       ],
               ),

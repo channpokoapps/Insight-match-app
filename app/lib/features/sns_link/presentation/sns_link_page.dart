@@ -9,6 +9,7 @@ import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/widgets/app_bottom_nav.dart';
 import '../../../shared/widgets/install_prompt.dart';
+import '../../../shared/widgets/retry_notice.dart';
 import '../data/sns_link_repository.dart';
 import '../domain/sns_link_status.dart';
 
@@ -122,19 +123,9 @@ class _SnsLinkPageState extends ConsumerState<SnsLinkPage>
                 padding: EdgeInsets.all(32),
                 child: Center(child: CircularProgressIndicator()),
               ),
-              error: (Object e, StackTrace _) => Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  children: <Widget>[
-                    const Text('連携状態を取得できませんでした。'),
-                    const SizedBox(height: 12),
-                    FilledButton.icon(
-                      icon: const Icon(Icons.refresh),
-                      onPressed: () => ref.invalidate(mySnsLinkStatusProvider),
-                      label: const Text('再読み込み'),
-                    ),
-                  ],
-                ),
+              error: (Object e, StackTrace _) => RetryNotice(
+                message: '連携状態を取得できませんでした。',
+                onRetry: () => ref.invalidate(mySnsLinkStatusProvider),
               ),
               data: (List<SnsLinkStatus> list) {
                 SnsLinkStatus? instagram;

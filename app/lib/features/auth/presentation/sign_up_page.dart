@@ -4,7 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/error/app_failure.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/widgets/error_notice.dart';
+import '../../../shared/widgets/submit_button.dart';
 import '../data/auth_repository.dart';
+import '../domain/auth_validators.dart';
 
 /// アカウント新規作成画面。
 ///
@@ -179,15 +181,10 @@ class _SignUpPageState extends ConsumerState<SignUpPage> {
           ErrorNotice(message: _error!),
         ],
         const SizedBox(height: 24),
-        FilledButton(
-          onPressed: _submitting ? null : _signUp,
-          child: _submitting
-              ? const SizedBox(
-                  height: 20,
-                  width: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Text('登録する'),
+        SubmitButton(
+          label: '登録する',
+          submitting: _submitting,
+          onPressed: _signUp,
         ),
       ],
     );

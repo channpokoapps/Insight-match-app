@@ -143,8 +143,8 @@ final Provider<GoRouter> appRouterProvider = Provider<GoRouter>((Ref ref) {
 /// 認証・登録段階に応じたリダイレクト先を返す。移動不要なら null。
 String? _redirect(Ref ref, GoRouterState state) {
   final String location = state.matchedLocation;
-  final bool signedIn =
-      ref.read(supabaseClientProvider).auth.currentUser != null;
+  // 認証状態は Repository/Provider 経由でのみ参照する(SupabaseClient.auth を直接触らない)。
+  final bool signedIn = ref.read(currentUserProvider) != null;
   final bool atAuthPage = location == AppRoutes.signIn ||
       location == AppRoutes.signUp ||
       location == AppRoutes.passwordReset;
