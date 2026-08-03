@@ -1,49 +1,85 @@
-name: Claude Code
+name: Claude
 
+# スマホ（GitHub モバイルアプリ）などからチャット感覚で指示するためのワークフロー。
+#
+# 使い方:
+#   1. Issue を立てて本文に「@claude ○○を実装して」と書く
+#   2. または既存の Issue / PR のコメントに「@claude ○○を直して」と書く
+#   3. Claude が実装し、ブランチを切ってコミットし、PR を作る
+#   4. ci.yml が自動で走り、結果が PR 上に表示される
+#
+# 認証は CLAUDE_CODE_OAUTH_TOKEN（Pro / Max サブスクリプション）を使う。
+# ローカルで `claude setup-token` を実行して得たトークンを
+# リポジトリの Secrets に登録しておくこと（docs/manual_setup/github_automation.md §1）。
+# API 従量課金にしたい場合は ANTHROPIC_API_KEY に差し替える。
 on:
   issue_comment:
     types: [created]
   pull_request_review_comment:
     types: [created]
-  issues:
-    types: [opened, assigned]
   pull_request_review:
     types: [submitted]
+  issues:
+    # assigned を含めると、@claude を含む Issue のアサインを変えるたびに
+    # 再実行されてトークンと無料枠を浪費するため opened だけにする。
+    types: [opened]
 
 jobs:
   claude:
+    # @claude を含むイベントのときだけ起動する。
+    # この if が無いと全コメントでジョブが立ち上がり無料枠を消費してしまう。
+    #
+    # bot（[bot] で終わるアクター）は除外する。claude[bot] 自身が投稿する
+    # 進捗コメントにも issue_comment イベントが発火するため、除外しないと
+    # 自分のコメントで自分の実行を再起動・打ち切りしてしまう。
+    #
+    # ★ このリポジトリは公開（public）★
+    # 誰でも Issue やコメントを書けるため、書き込み権限を持つ人
+    # （OWNER / MEMBER / COLLABORATOR）の投稿だけで起動する。これが無いと
+    # 第三者の「@claude」コメント 1 つで利用枠を消費させられてしまう。
+    # claude-code-action 自体にも権限チェックはあるが、ジョブの起動自体を抑える。
     if: |
-      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
-      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
-      (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude')) ||
-      (github.event_name == 'issues' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')))
+      !endsWith(github.actor, '[bot]') && (
+        (github.event_name == 'issue_comment'
+          && contains(github.event.comment.body, '@claude')
+          && contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association)) ||
+        (github.event_name == 'pull_request_review_comment'
+          && contains(github.event.comment.body, '@claude')
+          && contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association)) ||
+        (github.event_name == 'pull_request_review'
+          && contains(github.event.review.body, '@claude')
+          && contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.review.author_association)) ||
+        (github.event_name == 'issues'
+          && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude'))
+          && contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.issue.author_association))
+      )
+    # 同じ Issue / PR で @claude を連投されたときに古い実行を打ち切り、
+    # 無料枠とトークン消費の無駄をなくす。
+    #
+    # ワークフローレベルに置いてはならない。ワークフローレベルの concurrency は
+    # if で skip されるだけの実行（@claude を含まない普通のコメントや
+    # claude[bot] の進捗コメント）でも同じグループに参加し、実行中の本体を
+    # キャンセルしてしまう。ジョブレベルなら if を通過した実行だけが参加する。
+    concurrency:
+      group: claude-${{ github.event.issue.number || github.event.pull_request.number }}
+      cancel-in-progress: true
     runs-on: ubuntu-latest
+    # 暴走したジョブが無料枠を食い潰さないよう上限を設ける。
+    timeout-minutes: 30
     permissions:
-      contents: read
-      pull-requests: read
-      issues: read
-      id-token: write
-      actions: read # Required for Claude to read CI results on PRs
+      contents: write        # ブランチ作成・コミットに必要
+      pull-requests: write   # PR の作成・コメントに必要
+      issues: write          # Issue への返信に必要
+      id-token: write        # OIDC トークンの取得に必要
+      actions: read          # CI の実行結果を読むために必要
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
-
-      - name: Run Claude Code
-        id: claude
+      # checkout は不要。claude-code-action@v1 がイベントに応じた
+      # 正しい ref を自前で取得する。
+      - name: Claude Code を実行
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-
-          # This is an optional setting that allows Claude to read CI results on PRs
-          additional_permissions: |
-            actions: read
-
-          # Optional: Give a custom prompt to Claude. If this is not specified, Claude will perform the instructions specified in the comment that tagged it.
-          # prompt: 'Update the pull request description to include a summary of changes.'
-
-          # Optional: Add claude_args to customize behavior and configuration
-          # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
-          # or https://code.claude.com/docs/en/cli-reference for available options
-          # claude_args: '--allowed-tools Bash(gh pr *)'
+          claude_args: |
+            --max-turns 30
+            --model sonnet
+            --append-system-prompt "リポジトリ直下の AGENTS.md と CLAUDE.md を必ず読み、その規約に従うこと。特に AGENTS.md §0 の R-1〜R-10（インサイト実数値・SNS トークンの非開示）はいかなる機能要件よりも優先し、R-1〜R-5 に触れる変更には supabase/tests/ にテストを追加する。インサイト開示範囲の判断は必ず非開示側に倒す。コミットメッセージは日本語で Conventional Commits の接頭辞を付ける。main へ直接コミットせず必ず claude/ で始まる作業ブランチを使う。変更したコンポーネントの検証（flutter analyze・flutter test・supabase test db・deno task check の該当するもの）を実行してから PR を出す。"

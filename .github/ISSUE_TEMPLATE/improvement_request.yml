@@ -1,0 +1,66 @@
+# 改善要望フォーム。不具合ではないが直したい・足したいことを書く。
+#
+# ★ 編集時の禁則は bug_report.yml の冒頭コメントと同じ ★
+#   checkboxes を使わない / label と title: に @claude を書かない。
+#   dropdown だけが「選ばれたときにだけ本文へ出る」ので、発火制御に使えるのはこれだけ。
+name: 改善したいこと
+description: 使いにくかった点や、あったらいい機能を書く
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        思いついたことをそのまま書けば大丈夫です。
+
+        > スクリーンショットを貼るときは、インサイトの実数値・SNS アカウント名・
+        > 氏名が写り込んでいないか確認してください（このリポジトリは公開です）。
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: どこの話ですか
+      options:
+        - "投稿者（クリエイター）側の画面"
+        - "PR依頼者（クライアント）側の画面"
+        - "Web お試し版（閲覧専用）"
+        - "ログイン・アカウント登録"
+        - "SNS 連携・インサイト同期（Instagram / LINE）"
+        - "わからない・複数にまたがる"
+      default: 5
+    validations:
+      required: true
+
+  - type: textarea
+    id: what_to_change
+    attributes:
+      label: どう変えたいですか
+      placeholder: 案件一覧で、報酬の高い順に並び替えられるようにしたい
+    validations:
+      required: true
+
+  - type: textarea
+    id: why
+    attributes:
+      label: なぜそうしたいですか
+      description: 困っている場面が分かると、実装の判断がぶれません。
+      placeholder: 案件が増えてくると、条件のいいものを探すのに全部スクロールする必要がある
+    validations:
+      required: true
+
+  # Claude の起動スイッチ。詳細は bug_report.yml の同じ項目のコメントを参照。
+  # このアプリはインサイト非開示（AGENTS.md R-1〜R-5）が生命線のため、
+  # 依頼文に「開示範囲の判断は非開示側に倒す」ことを Claude 側の
+  # システムプロンプト（claude.yml）で常に念押ししている。
+  - type: dropdown
+    id: claude_request
+    attributes:
+      label: Claude に実装を依頼しますか
+      description: |
+        「依頼する」を選ぶと、Issue の作成と同時に Claude が実装を始め、PR を作ります。
+        あとから頼みたくなったら、この Issue に「@claude お願い」とコメントすれば同じことが起きます。
+      options:
+        - "いまは依頼しない（記録だけ残す）"
+        - "依頼する: @claude 上の内容を実装して、テストも追加して"
+      default: 0
+    validations:
+      required: true

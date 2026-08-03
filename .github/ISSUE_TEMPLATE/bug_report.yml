@@ -1,0 +1,104 @@
+# 不具合報告フォーム。スマホ（GitHub モバイルアプリ）から最小手数で書けるよう、
+# 必須項目を絞り、選択肢で答えられるものは dropdown にしている。
+#
+# ★ このファイルを編集するときの禁則（守らないと Claude が毎回起動する）★
+#
+#   1. checkboxes を使わない。
+#      issue forms の checkboxes は「未チェックでも」全選択肢が
+#      `- [ ] ラベル` として Issue 本文にレンダリングされる。
+#      ラベルに @claude を含めると claude.yml の
+#      contains(github.event.issue.body, '@claude') が常に真になる。
+#   2. dropdown / input / textarea の label に @claude を書かない。
+#      label（見出し）は選択の有無に関わらず本文に出力される。
+#      本文に出ないのは description と placeholder と type: markdown だけ。
+#   3. front matter の title: に @claude を書かない。
+#      claude.yml は body だけでなく title も判定対象にしている。
+#
+# dropdown は「選択された選択肢のテキストだけ」が本文に出るため、
+# 発火の制御に使えるのはこれだけである。
+name: 不具合の報告
+description: スマホやブラウザで動かなかったことを報告する
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        気づいたことをそのまま書けば大丈夫です。分からない項目は空のままで構いません。
+
+        > **スクリーンショットを貼るときの注意（このリポジトリは公開です）**
+        > インサイトの実数値（フォロワー数・リーチなどの数字）、SNS のアカウント名、
+        > 氏名・メールアドレスが読み取れる画像は貼らないでください。
+        > 迷ったら数字の部分を塗りつぶしてから貼ってください。
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: どこで起きましたか
+      options:
+        - "投稿者（クリエイター）側の画面"
+        - "PR依頼者（クライアント）側の画面"
+        - "Web お試し版（閲覧専用）"
+        - "ログイン・アカウント登録"
+        - "SNS 連携・インサイト同期（Instagram / LINE）"
+        - "わからない・複数にまたがる"
+      default: 5
+    validations:
+      required: true
+
+  - type: dropdown
+    id: environment
+    attributes:
+      label: どの環境で確認しましたか
+      description: PR のコメントに貼られたプレビュー URL を開いた場合は「PR プレビュー」です。
+      options:
+        - "本番（web.app の URL）"
+        - "PR プレビュー"
+        - "App Distribution で配られた APK（Android）"
+        - "ローカル開発環境"
+      default: 0
+    validations:
+      required: true
+
+  - type: textarea
+    id: what_happened
+    attributes:
+      label: 何が起きましたか
+      description: 画面の様子をそのまま書いてください。スクリーンショットも貼れます。
+      placeholder: 案件に応募しようとしたら画面が真っ白になった
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: どうなってほしいですか
+      placeholder: 応募できて「応募しました」と出てほしい
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: 再現手順
+      description: 分かる範囲で構いません。
+      placeholder: |
+        1. アプリを開いて案件一覧を表示する
+        2. 一番上の案件をタップする
+        3. 「応募する」を押す
+
+  # ここが Claude の起動スイッチ。選択された選択肢のテキストだけが本文に出るため、
+  # 「依頼する」を選んだときだけ本文に @claude が現れ、claude.yml が起動する。
+  # 選択肢の文面はそのまま Claude への指示文になる。
+  - type: dropdown
+    id: claude_request
+    attributes:
+      label: Claude に実装を依頼しますか
+      description: |
+        「依頼する」を選ぶと、Issue の作成と同時に Claude が実装を始め、PR を作ります。
+        あとから頼みたくなったら、この Issue に「@claude 直して」とコメントすれば同じことが起きます。
+      options:
+        - "いまは依頼しない（記録だけ残す）"
+        - "依頼する: @claude この不具合の原因を調べて直して、テストも追加して"
+      default: 0
+    validations:
+      required: true

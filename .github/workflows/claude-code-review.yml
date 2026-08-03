@@ -1,0 +1,57 @@
+name: Claude Code Review
+
+# PR が出揃った時点で Claude に自動レビューさせる。
+#
+# synchronize（PR への push）は意図的に外している。Claude が実装 → CI 失敗 →
+# 修正 push という往復のたびにレビューが走り直し、1 回 3〜10 分の無料枠と
+# トークンを二重に消費するため。PR の途中でもう一度見てほしいときは
+# コメントで「@claude レビューして」と書けば claude.yml が対応する。
+on:
+  pull_request:
+    types: [opened, ready_for_review]
+
+# 同じ PR で連続して起動したら古い実行を打ち切り、無料枠を無駄遣いしない。
+# 他のワークフローと揃えた設定。
+concurrency:
+  group: claude-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  claude-review:
+    name: PR の自動レビュー
+    # 公開リポジトリのため fork からの PR では起動しない。secrets が渡らず
+    # 失敗するだけでなく、第三者の PR で利用枠を消費させないための guard。
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    # 暴走したジョブが無料枠を食い潰さないよう上限を設ける。
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      pull-requests: write  # レビュー結果のコメント・インラインコメント投稿に必要
+      issues: read
+      id-token: write   # OIDC トークンの取得に必要
+
+    steps:
+      # 差分を読むだけなので履歴は不要。
+      - name: リポジトリを取得
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Claude によるコードレビューを実行
+        id: claude-review
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'
+          plugins: 'code-review@claude-code-plugins'
+          # --comment を付けないとレビュー結果が Actions のログに出るだけで
+          # PR には何も投稿されない（プラグインの仕様）。
+          prompt: '/code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }} --comment'
+          # プラグインのコマンド定義（frontmatter の allowed-tools）は
+          # メイン会話にしか効かず、レビューの実体である並列サブエージェントの
+          # gh 呼び出しが全て権限拒否されてジョブが失敗する（Shift Navi の
+          # PR #2 で 37 回拒否された実績あり）。そのためプラグインが宣言している
+          # ツール一覧と同じものを --allowedTools でセッション全体に許可する。
+          claude_args: |
+            --allowedTools "Bash(gh issue view:*),Bash(gh search:*),Bash(gh issue list:*),Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr list:*),mcp__github_inline_comment__create_inline_comment"

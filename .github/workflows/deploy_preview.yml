@@ -1,0 +1,287 @@
+name: Deploy Preview
+
+# PR の変更内容（Flutter Web お試し版）を Firebase Hosting のプレビュー
+# チャンネルにデプロイし、スマホで開ける確認 URL を PR にコメントする。
+#
+# トリガーが 2 系統あるのは、PR の作られ方が 2 通りあるため:
+#   - pull_request      … 人間や claude.yml（GitHub App トークン）が作った PR
+#   - push: claude/**   … auto-pr.yml が作る PR。GITHUB_TOKEN 製の PR では
+#                         pull_request イベントが発火しない（GitHub の再帰防止仕様）
+#                         ため、push 時点で起動する（ci.yml と同じ理由）。
+#
+# concurrency はブランチ名で切る。PR 番号にすると pull_request と push で
+# グループが分かれ、同じ変更が二重にデプロイされてしまう。
+#
+# チャンネルは PR ごとではなく固定の「preview」1 本にしている。
+# このアプリのログイン（Google ログイン・Supabase Auth）はホスト名を
+# 事前登録しておく必要があり、PR ごとに URL が変わると毎回
+# 「GCP の承認済みオリジン」と「Supabase の Redirect URLs」を手動登録する
+# ことになるため。固定チャンネルなら一度登録すれば済む
+# （docs/manual_setup/github_automation.md §4）。
+# 副作用として複数 PR が同時に使うと後勝ちで上書きされるが、
+# コメントに「どの PR がデプロイしたか」を出して明示する。
+#
+# --no-authorized-domains を必ず付けること。既定ではプレビュードメインを
+# Firebase Auth の承認済みドメインに自動登録しようとするが、CI の
+# サービスアカウントにはその権限を与えていない。
+#
+# 注意: プレビューが差し替えるのは Web の静的ファイルだけ。接続先の
+# Supabase（DB・RPC・Edge Functions）は本番のままなので、supabase/ を
+# 変更した PR ではその旨をコメントで警告する。
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+  push:
+    branches: ['claude/**']
+
+concurrency:
+  group: preview-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write   # 確認 URL のコメントに必要
+
+env:
+  FIREBASE_TOOLS_VERSION: '13.29.1'
+
+jobs:
+  # ------------------------------------------------------------------
+  # 前提の判定。PR 番号の解決・変更検出・Secrets の設定確認をまとめて行う。
+  # ------------------------------------------------------------------
+  changes:
+    name: 変更検出
+    # fork からの PR には secrets が渡らずデプロイできないため明示的にスキップする。
+    if: >-
+      github.event_name != 'pull_request'
+      || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      pr_number: ${{ steps.pr.outputs.number }}
+      app: ${{ steps.filter.outputs.app }}
+      supabase: ${{ steps.filter.outputs.supabase }}
+      configured: ${{ steps.secrets.outputs.configured }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # push イベント（claude/** ブランチ）では PR 番号がイベントに含まれない
+      # ため、gh で head ブランチから逆引きする。このワークフローと
+      # auto-pr.yml は同じ push で同時に起動するので、PR 作成が終わるまで
+      # 少し待つ必要がある（リトライしないと初回 push のプレビューが
+      # 毎回スキップされてしまう）。
+      - name: PR 番号を解決する
+        id: pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            number="${{ github.event.pull_request.number }}"
+          else
+            number=""
+            for attempt in 1 2 3 4 5; do
+              number="$(gh pr list --head "${{ github.ref_name }}" --base main \
+                --json number --jq '.[0].number // empty')"
+              [ -n "$number" ] && break
+              echo "PR がまだ見つからない（試行 ${attempt}/5）。auto-pr.yml の完了を待つ..."
+              sleep 15
+            done
+          fi
+          echo "number=${number}" >> "$GITHUB_OUTPUT"
+          echo "PR: ${number:-なし}"
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          # push イベント（claude/** ブランチ）では main との差分で判定する。
+          # 既定の「直前の push との差分」だと、新規ブランチの初回 push
+          # （claude.yml が作るブランチは常にこれ）で比較元が無く判定できない。
+          base: main
+          filters: |
+            app:
+              - 'app/**'
+              - 'firebase.json'
+            supabase:
+              - 'supabase/**'
+
+      # Secrets が未登録の段階でジョブを赤くしない。未設定なら「設定してね」の
+      # 案内コメントを出してスキップする（初回セットアップ前の PR で CI が
+      # 失敗だらけになるのを防ぐ）。
+      - name: デプロイに必要な Secrets の有無を確認
+        id: secrets
+        env:
+          HAS_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT != '' }}
+          HAS_ENV: ${{ secrets.FLUTTER_ENV_PROD != '' }}
+          HAS_WEB: ${{ secrets.FLUTTER_WEB_FIREBASE_CONFIG != '' }}
+          HAS_PROJECT: ${{ vars.FIREBASE_PROJECT_ID != '' }}
+        run: |
+          if [ "$HAS_SA" = "true" ] && [ "$HAS_ENV" = "true" ] && [ "$HAS_WEB" = "true" ] && [ "$HAS_PROJECT" = "true" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::デプロイ用の Secrets / Variables が未設定です（docs/manual_setup/github_automation.md §2〜3）。プレビューをスキップします。"
+          fi
+
+  # ------------------------------------------------------------------
+  # Flutter Web のビルドとプレビューチャンネルへのデプロイ。
+  # app/ の変更時のみ（ビルドに 6〜10 分かかるため）。
+  # ------------------------------------------------------------------
+  preview:
+    name: Web プレビュー
+    needs: changes
+    if: >-
+      needs.changes.outputs.app == 'true'
+      && needs.changes.outputs.pr_number != ''
+      && needs.changes.outputs.configured == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      url: ${{ steps.deploy.outputs.url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # バージョンは ci.yml と同じく stable の最新に追従する。
+      - name: Flutter をセットアップ
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: pub パッケージをキャッシュ
+        uses: actions/cache@v4
+        with:
+          path: ~/.pub-cache
+          key: pub-${{ runner.os }}-${{ hashFiles('app/pubspec.lock') }}
+          restore-keys: pub-${{ runner.os }}-
+
+      # 接続情報（env/prod.json・env/web_firebase_config.json）は gitignore
+      # 対象なので Secrets から復元する。中身の作り方は
+      # docs/manual_setup/gcp_firebase.md、Secrets への登録は
+      # docs/manual_setup/github_automation.md §3。
+      - name: 接続設定を復元する
+        env:
+          ENV_PROD: ${{ secrets.FLUTTER_ENV_PROD }}
+          WEB_FIREBASE_CONFIG: ${{ secrets.FLUTTER_WEB_FIREBASE_CONFIG }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$ENV_PROD" > env/prod.json
+          printf '%s' "$WEB_FIREBASE_CONFIG" > env/web_firebase_config.json
+
+      - name: Flutter Web をビルド
+        working-directory: app
+        run: |
+          flutter pub get
+          flutter build web --release \
+            --dart-define-from-file=../env/prod.json \
+            --dart-define-from-file=../env/web_firebase_config.json
+
+      - name: Firebase をセットアップ
+        uses: ./.github/actions/setup_firebase
+        with:
+          service_account_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          firebase_tools_version: ${{ env.FIREBASE_TOOLS_VERSION }}
+
+      - name: 固定プレビューチャンネルへデプロイ
+        id: deploy
+        run: |
+          set -euo pipefail
+          # チャンネルを固定にする理由はファイル冒頭のコメントを参照。
+          # 30 日で失効するが、デプロイのたびに期限が延びるので
+          # 月 1 回でも使っていれば URL は変わらない。
+          firebase hosting:channel:deploy preview \
+            --expires 30d \
+            --no-authorized-domains \
+            --project "${{ vars.FIREBASE_PROJECT_ID }}" \
+            --json > "$RUNNER_TEMP/deploy_result.json"
+          url="$(jq -r '.result | to_entries[0].value.url' "$RUNNER_TEMP/deploy_result.json")"
+          echo "url=${url}" >> "$GITHUB_OUTPUT"
+          echo "プレビュー: ${url}"
+
+      - name: 鍵の痕跡を消す
+        if: always()
+        run: rm -f "$RUNNER_TEMP/firebase_service_account.json" env/prod.json env/web_firebase_config.json
+
+  # ------------------------------------------------------------------
+  # 確認リンクを PR にコメントする。マーカー付きの既存コメントがあれば
+  # 更新する（スティッキー方式）。push のたびにコメントが積み上がって
+  # スマホで読みにくくなるのを防ぐ。
+  # ------------------------------------------------------------------
+  comment:
+    name: 確認リンクの投稿
+    needs: [changes, preview]
+    # プレビューが走った（または設定不足でスキップした）ことを PR に伝える。
+    # app/ に変更が無い PR では何もコメントしない。
+    if: >-
+      always() && !cancelled()
+      && needs.changes.result == 'success'
+      && needs.changes.outputs.pr_number != ''
+      && needs.changes.outputs.app == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: プレビュー URL をコメント
+        uses: actions/github-script@v7
+        env:
+          PR_NUMBER: ${{ needs.changes.outputs.pr_number }}
+          PREVIEW_RESULT: ${{ needs.preview.result }}
+          PREVIEW_URL: ${{ needs.preview.outputs.url }}
+          CONFIGURED: ${{ needs.changes.outputs.configured }}
+          SUPABASE_CHANGED: ${{ needs.changes.outputs.supabase }}
+        with:
+          script: |
+            const marker = '<!-- insight-match-preview -->';
+            const pr_number = Number(process.env.PR_NUMBER);
+            const lines = [marker, '## 📱 スマホで確認する', ''];
+
+            if (process.env.PREVIEW_RESULT === 'success' && process.env.PREVIEW_URL) {
+              lines.push('| 対象 | リンク |');
+              lines.push('| --- | --- |');
+              lines.push(`| Web お試し版（プレビュー） | ${process.env.PREVIEW_URL} |`);
+              lines.push('');
+              lines.push(`- プレビューは**固定チャンネル**です（複数 PR で共有・後勝ち）。最後にデプロイした PR: #${pr_number}`);
+              lines.push('- push すると同じ URL に更新されます。反映されないときはブラウザを再読み込みしてください。');
+              lines.push('- Android の実機で確認したいときは、この PR に `/apk` とコメントすると App Distribution に配布されます。');
+            } else if (process.env.CONFIGURED === 'false') {
+              lines.push('⚙️ デプロイ用の Secrets / Variables が未設定のため、プレビューをスキップしました。');
+              lines.push('設定手順: `docs/manual_setup/github_automation.md` §2〜3');
+            } else {
+              lines.push('❌ プレビューのデプロイに失敗しました。Actions のログを確認してください。');
+            }
+
+            if (process.env.SUPABASE_CHANGED === 'true') {
+              lines.push('');
+              lines.push('- ⚠️ この PR は `supabase/` を変更しています。プレビューが接続するのは**本番の Supabase** なので、DB・RPC・Edge Functions の挙動はマージ後（かつ Supabase への反映後）に確認してください。');
+            }
+
+            lines.push('');
+            lines.push(`<sub>更新: ${context.sha.slice(0, 7)} / run ${context.runId}</sub>`);
+            const body = lines.join('\n');
+
+            // マーカー付きの既存コメントを探して更新、無ければ新規作成する。
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: pr_number,
+              per_page: 100,
+            });
+            const existing = comments.find(c => c.body && c.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr_number,
+                body,
+              });
+            }
+
+            // GitHub モバイルの Actions 画面からも辿れるように Step Summary にも出す。
+            await core.summary.addRaw(body).write();
