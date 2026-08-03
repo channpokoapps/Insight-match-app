@@ -1,9 +1,9 @@
 name: Auto PR
 
 # claude/** ブランチが push されたら、main 向けの PR を自動作成する。
-# Cowork のサンドボックスは GitHub へのネットワークアクセスがブロックされているため、
-# 「commit の自動生成」まではサンドボックス側で行い、push 後の PR 作成は
-# GitHub Actions(ネットワーク制限のない実行環境)側に任せる構成。
+# エージェント側の実行環境は外部ネットワークが制限されている場合があるため、
+# 「commit の生成」までをエージェントが行い、PR 作成は GitHub Actions
+# (ネットワーク制限のない実行環境)側に任せる構成。
 on:
   push:
     branches:
@@ -42,8 +42,13 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if gh pr view "${{ github.ref_name }}" --json url >/dev/null 2>&1; then
-            echo "PR already exists for ${{ github.ref_name }}, skipping create."
+          # 「open な PR があるか」で判定する。`gh pr view <branch>` はマージ済み・
+          # クローズ済みの PR も拾うため、これを存在確認に使うと **マージ後に同じ
+          # ブランチへ push しても PR が作られなくなる**（変更が行き場を失う）。
+          existing="$(gh pr list --head "${{ github.ref_name }}" --base main \
+            --state open --json number --jq '.[0].number // empty')"
+          if [ -n "$existing" ]; then
+            echo "PR #${existing} is already open for ${{ github.ref_name }}, skipping create."
           else
             gh pr create \
               --base main \
