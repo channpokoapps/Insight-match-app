@@ -34,6 +34,7 @@
 | 9 | [admob.md](admob.md) | 広告（AdMob）の設定 | 低 |
 | 10 | [monitoring_backup.md](monitoring_backup.md) | 監視・アラート・バックアップ | 中 |
 | 11 | [release_checklist.md](release_checklist.md) | 公開当日の手順と、公開後の運用 | 公開直前 |
+| 12 | [github_automation.md](github_automation.md) | GitHub 自動化（Issue から Claude・プレビュー・本番反映・APK 配布）の Secrets 設定 | 高（PoC を回す前） |
 
 ---
 

@@ -1,0 +1,19 @@
+# Issue の入口設定。
+#
+# 空の Issue を禁止してフォーム経由に一本化する。フォームには
+# 「Claude に実装を依頼するか」の dropdown があり、その選択だけで
+# .github/workflows/claude.yml が起動するかどうかが決まる。
+# 自由記述の Issue を許すと、本文にたまたま @claude が含まれて
+# 意図せず起動する（＝無料枠を 3〜15 分消費する）事故が起きうる。
+blank_issues_enabled: false
+
+contact_links:
+  - name: 開発ドキュメント
+    url: https://github.com/channpokoapps/Insight-match-app/blob/main/docs/README.md
+    about: 要件定義・構成・API・未決事項（OI-xx）はここにまとまっている。
+  - name: PoC の回し方ガイド
+    url: https://github.com/channpokoapps/Insight-match-app/blob/main/docs/poc_guide.md
+    about: スマホだけで「気づく → Issue → Claude が実装 → 確認」のループを回す手順。
+  - name: 手動設定の手順
+    url: https://github.com/channpokoapps/Insight-match-app/blob/main/docs/manual_setup/README.md
+    about: クラウド設定やストア申請など、コードでは解決しない作業の手順。

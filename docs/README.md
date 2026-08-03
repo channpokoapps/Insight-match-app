@@ -26,6 +26,7 @@
 | [open_issues.md](open_issues.md) | 未決事項リスト（Open Issues / TBD）。全章の TBD をここに集約する（要件定義書 13章に相当） |
 | [glossary.md](glossary.md) | 用語集。全章で使う用語の唯一の定義元（要件定義書 14章に相当） |
 | [backlog.md](backlog.md) | 実装タスク（T-xxx）。機能要件をリリース0／リリース1に分けて着手順に並べたもの |
+| [poc_guide.md](poc_guide.md) | **PoC の回し方**。スマホだけで「Issue → Claude が実装 → プレビュー確認 → マージ → 本番反映」のループを回す手順 |
 | [api/openapi.yaml](api/openapi.yaml) | RPC・Edge Functions のインターフェース定義 |
 
 ## アーキテクチャ決定記録（ADR）
