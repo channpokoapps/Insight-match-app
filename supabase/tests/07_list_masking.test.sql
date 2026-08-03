@@ -61,7 +61,7 @@ select is(
 select is(
   (select l.reward_description from public.list_campaigns_for_creator() l
    where l.id = 'ffffffff-1111-0000-0000-000000000001'),
-  null,
+  null::text,
   '条件未達の投稿者には報酬内容の実値を送らない'
 );
 
@@ -81,7 +81,7 @@ select is(
 select is(
   (select l.reward_description from public.list_campaigns_for_creator() l
    where l.id = 'ffffffff-1111-0000-0000-000000000001'),
-  'ディナーコース1名分',
+  'ディナーコース1名分'::text,
   '条件充足の投稿者には報酬内容の実値が返る'
 );
 
