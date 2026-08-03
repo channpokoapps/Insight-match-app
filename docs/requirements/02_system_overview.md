@@ -100,7 +100,7 @@ graph TB
 ```mermaid
 graph LR
   A["PR依頼者アプリ"] -->|"① 条件式のみ送信"| B["RPC<br/>SECURITY DEFINER"]
-  B -->|"② 内部でのみ実数値を読む"| C[("private スキーマ<br/>creator_insight_metrics")]
+  B -->|"② 内部でのみ実数値を読む"| C[("private スキーマ<br/>creator_metrics")]
   B -->|"③ boolean / 件数 / 匿名集計のみ返す"| A
   A -.->|"直接参照は権限エラー"| C
   style C fill:#ffe0e0

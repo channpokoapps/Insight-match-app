@@ -11,25 +11,16 @@
 
 ## A-0. この文書の使い方
 
-【事実】現在のリポジトリには **要件定義・DB マイグレーション・Edge Functions・Flutter のドメイン層とデータ層**まで入っています。
-一方で、**このリポジトリを作成した環境には Flutter SDK / Supabase CLI / Docker / Deno がありません**。したがって、以下はいずれも **一度も実行されていません**。
+【事実】現在のリポジトリには **要件定義・DB マイグレーション・Edge Functions・Flutter アプリ（認証・案件・SNS 連携の画面まで）** が入っており、GitHub Actions の CI（`flutter analyze` / `flutter test` / `supabase test db` / `deno task check`）も稼働済みです。`app/android/` と `app/web/` も Git 管理されています。
 
-| 項目 | 状態 |
-|---|---|
-| `flutter pub get` / `flutter analyze` / `flutter test` | **未実行** |
-| `supabase start` / `supabase db reset` / `supabase test db` | **未実行** |
-| `deno task check` / `deno lint` | **未実行** |
-| Android プロジェクト（`app/android/`） | **未生成** |
-| GitHub Actions | **未実行** |
-
-つまり **A-1〜A-8 は「動作確認」ではなく「初回の実行」** です。エラーが出るのは想定内なので、出たものを潰していってください。
+つまりこの文書の A-2〜A-8 は「壊れていないものを自分の PC でも動かす」ための手順です。CI が緑である限り、エラーが出たらまず自分の環境（ツールのバージョン・Docker・環境変数）を疑ってください。
 
 ### 完了の定義
 
 以下がすべて通ったらセットアップ完了です。
 
 - [ ] `supabase db reset` が最後まで通る
-- [ ] `supabase test db` で `01`〜`06` のテストがすべて ok
+- [ ] `supabase test db` で `supabase/tests/` のテストがすべて ok
 - [ ] `flutter analyze --fatal-infos` が 0 issues
 - [ ] `flutter test` が全件成功
 - [ ] `deno task check` がエラーなし
@@ -60,11 +51,11 @@
 | ツール | 必要バージョン | 用途 |
 |---|---|---|
 | Git | 2.40+ | — |
-| Flutter SDK | 3.22+（Dart 3.4+） | アプリ本体 |
+| Flutter SDK | stable 最新（CI も stable チャンネルを使用） | アプリ本体 |
 | Android Studio | 最新 | Android SDK / エミュレータ |
 | Docker Desktop | 最新 | Supabase ローカル環境 |
-| Supabase CLI | 1.190+ | マイグレーション・pgTAP |
-| Deno | 1.45+ | Edge Functions |
+| Supabase CLI | 最新（CI は latest を使用） | マイグレーション・pgTAP |
+| Deno | 2.x（CI は v2.x を使用） | Edge Functions |
 | VS Code | 最新 | — |
 
 ```powershell
@@ -98,31 +89,11 @@ VS Code を開くと `.vscode/extensions.json` に沿って拡張機能の推奨
 
 ---
 
-## A-3. Flutter プロジェクトのプラットフォーム生成
+## A-3. Flutter プラットフォームディレクトリについて
 
-【事実】`app/` には `lib/` `test/` `pubspec.yaml` はありますが、`android/` `ios/` `web/` などのプラットフォーム固有ディレクトリは**ありません**（環境依存のファイルなのでリポジトリに含めていません）。
+【事実】`app/android/`（applicationId: `app.insightmatch.android`）と `app/web/` は **Git 管理済み**です。条件付きの google-services 適用など手を入れた設定が入っているため、**`flutter create` を実行しないでください**（生成し直すと既存のカスタム設定が壊れます）。詳細は [app/README.md](../app/README.md) を参照してください。
 
-```powershell
-cd app
-flutter create . --project-name insight_match --org app.insightmatch --platforms=android,web
-```
-
-【要確認】`--org` は逆ドメイン形式のアプリケーション ID になります（例: `jp.co.yourcompany`）。**一度ストアに公開すると変更できません**ので、A-1 の 5 と合わせて先に決めてください（`OI-05` に関連）。
-
-`flutter create .` は既存ファイルを上書きしません（`pubspec.yaml` は既存が優先されます）が、実行後に必ず差分を確認してください。
-
-```powershell
-git status
-git diff app/pubspec.yaml
-```
-
-万一 `pubspec.yaml` が書き換わっていたら元に戻します。
-
-```powershell
-git checkout -- app/pubspec.yaml
-```
-
-【推奨】iOS は後回しにします。Instagram 連携と非開示ロジックの検証を Android で先に終わらせるほうが手戻りが少ないためです（`OI-06`）。
+【推奨】iOS は後回しにします。Instagram 連携と非開示ロジックの検証を Android で先に終わらせるほうが手戻りが少ないためです（`OI-06`）。iOS 対応時に初めて `flutter create . --platforms=ios` を検討します。
 
 ---
 
@@ -155,7 +126,7 @@ Copy-Item env\local.example.json env\local.json
 【前提】Docker Desktop が起動していること。
 
 ```powershell
-cd d:\app2
+# リポジトリのルートディレクトリで実行
 supabase start
 ```
 
@@ -199,6 +170,7 @@ supabase/tests/03_k_anonymity.test.sql ....... ok
 supabase/tests/04_criteria.test.sql .......... ok
 supabase/tests/05_alias.test.sql ............. ok
 supabase/tests/06_chat_masking.test.sql ...... ok
+supabase/tests/07_list_masking.test.sql ...... ok
 ```
 
 **ここが落ちたまま先へ進まないでください。** これらは「インサイト実数値が誰にも見えない」ことを機械的に保証する唯一の仕組みです（AGENTS.md R-1〜R-5）。
@@ -238,30 +210,29 @@ deno lint
 deno fmt --check
 ```
 
-ローカルで動かす場合:
+ローカルで動かす場合（リポジトリのルートディレクトリで実行）:
 
 ```powershell
-cd d:\app2
 supabase functions serve sync-worker --env-file supabase\functions\.env.local
 ```
 
-【要確認】`supabase/functions/.env.local` には Meta の App ID / App Secret / トークン暗号鍵が必要です。このファイルは `.gitignore` 済みで、**リポジトリには存在しません**。A-1 の 3 が完了してから作成してください。
+【要確認】`supabase/functions/.env.local` には Meta の App ID / App Secret（`META_APP_ID` / `META_APP_SECRET`）とトークン暗号鍵（`TOKEN_ENCRYPTION_KEY`）が必要です。このファイルは `.gitignore` 済みで、**リポジトリには存在しません**。A-1 の 3 が完了してから作成してください。
 
-【事実】`sync-worker/index.ts` の `decryptToken` は AES-GCM の実装が入っていますが、**鍵の管理方法が未決**です（`OI-17`）。着手前に方式を決めてください。
+【事実】トークンの暗号化は **AES-256-GCM ＋ Supabase Secrets の `TOKEN_ENCRYPTION_KEY`** で決定・実装済みです（`OI-17`、[ADR-0006](adr/0006-token-encryption.md)。実装は `supabase/functions/_shared/crypto.ts`）。
 
 ---
 
 ## A-8. CI を緑にする
 
-【事実】`.github/workflows/ci.yml` に 5 つのジョブがあります。**一度も実行されていません。**
+【事実】`.github/workflows/ci.yml` には 3 つのジョブがあり、main / develop / `claude/**` への push と PR で実行されます。
 
-| ジョブ | 内容 | 通す順番 |
-|---|---|---|
-| `guardrails` | 非開示要件の静的チェック（grep） | 1 番目（依存が無く速い） |
-| `database` | マイグレーション適用 + pgTAP | 2 番目 |
-| `functions` | `deno lint` / `deno task check` | 3 番目 |
-| `flutter` | `analyze` / `test` | 4 番目 |
-| `android-build` | APK ビルド | 5 番目（`app/android/` 生成後） |
+| ジョブ | 内容 |
+|---|---|
+| `flutter` | `flutter pub get` / `flutter analyze` / `flutter test` |
+| `supabase` | `supabase db start` + `supabase test db`（マイグレーション適用 + pgTAP） |
+| `edge-functions` | `deno task check` / `deno task test` |
+
+このほかに `.github/workflows/` には次のワークフローがあります: `auto-pr.yml`（`claude/**` push で main 向け PR を自動作成）、`claude.yml`（`@claude` メンションで起動）、`claude-code-review.yml`（PR の自動レビュー）、`deploy_preview.yml`（プレビュー環境へデプロイ）、`deploy_production.yml`（CI 成功後に本番へデプロイ）、`android_build.yml`（APK ビルド）。
 
 【推奨】ローカルで A-5〜A-7 を通してから push してください。CI で試行錯誤すると 1 回あたり数分待つことになります。
 
@@ -274,8 +245,8 @@ supabase functions serve sync-worker --env-file supabase\functions\.env.local
 | ID | 決めること | 影響範囲 |
 |---|---|---|
 | `OI-01` | Meta 審査の申請主体（法人 / 個人） | 申請開始時期。全体の日程を左右する |
-| `OI-17` | SNS アクセストークンの暗号化方式と鍵管理 | Edge Functions・`private.social_credentials` |
-| `OI-26` | 認証方式（メール / SNS / 電話） | 認証画面・`profiles` |
+| ~~`OI-17`~~ | ~~トークン暗号化~~ → **決定済み**（AES-256-GCM + Supabase Secrets、ADR-0006） | — |
+| ~~`OI-26`~~ | ~~認証方式~~ → **決定済み**（メール＋パスワード / Google サインイン、admin は MFA 必須） | — |
 | `OI-06` | 対応 OS 下限 | `pubspec.yaml`・使えるパッケージ |
 | `OI-37` | Instagram で実際に取れる指標の確定 | 条件式の選択肢・`private.creator_metrics` |
 | `OI-43` | チャットのリアルタイム配信方式 | `chat_repository.dart`・Realtime 設定 |
@@ -286,23 +257,11 @@ supabase functions serve sync-worker --env-file supabase\functions\.env.local
 
 ---
 
-## A-10. 最初の 2 スプリントの進め方
+## A-10. 実装の進め方
 
-【推奨】[backlog.md](backlog.md) の「リリース0（内部検証）」から着手します。
+【事実】初期 2 スプリント相当（認証・プロフィール・ロール分岐、Instagram OAuth・トークン保存・インサイト同期 `T-016` / `T-020`〜`T-026`）は**実装済み**です。進捗は [backlog.md](backlog.md) と `git log` を参照してください。
 
-### スプリント 1 — 土台と非開示の検証
-
-1. A-1〜A-8 のセットアップ完了
-2. `T-001`〜`T-006`（認証・プロフィール・ロール分岐）
-3. `supabase/tests/` が全部通る状態を維持する
-
-### スプリント 2 — Instagram 連携
-
-1. `T-010`〜`T-016`（OAuth・トークン保存・手動同期）
-2. `T-020`〜`T-026`（インサイト取得・`private.creator_metrics` への集計）
-3. `OI-37` の確定と `docs/requirements/09_external_integrations.md` の更新
-
-【推奨】UI は後回しにしてください。このプロダクトの難しさは画面ではなく**「見せない」仕組み**にあります。そこが動いてから画面を作るほうが速く終わります。
+【推奨】以降も [backlog.md](backlog.md) の「リリース0 → リリース1」の順に着手します。UI より先にサーバ側の「見せない」仕組み（RPC・RLS・pgTAP テスト）を固めてから画面を作るほうが手戻りが少なく済みます。残る大きな未着手領域はチャット UI・応募一覧 UI・成果レポート UI です（Repository 層は実装済み）。
 
 ---
 
@@ -316,24 +275,13 @@ supabase functions serve sync-worker --env-file supabase\functions\.env.local
 | VS Code で Dart のエラーが大量に出る | Deno 拡張がワークスペース全体で有効 | `.vscode/settings.json` の `deno.enablePaths` を確認 |
 | `flutter run` で接続エラー | Android エミュレータから `localhost` は見えない | `SUPABASE_URL` を `http://10.0.2.2:54321` にする |
 | `flutter analyze` で大量の info | `--fatal-infos` は info も失敗扱い | コードを直す。ルールを消さない |
-| CI の `guardrails` が落ちる | `app/lib` に `service_role` の文字列 | 本当に混入していないか確認する |
+| CI の `supabase` ジョブが落ちる | マイグレーションか pgTAP テストの問題 | ローカルで `supabase db reset && supabase test db` を再現してから直す |
 
 ---
 
-## A-12. このPCでできること / 別PCが必要なこと
+## A-12. ツールが無い環境でもできること
 
-【事実】現時点での切り分けです。
-
-| できること（ツール不要） | 別PCが必要なこと |
-|---|---|
-| 要件定義・ADR の追記・修正 | `flutter` コマンド全般 |
-| SQL マイグレーションの記述 | `supabase` コマンド全般 |
-| Dart のドメイン型・Repository の記述 | `deno` コマンド全般 |
-| Edge Functions のコード記述 | Docker を使う検証すべて |
-| OpenAPI・バックログの更新 | 実機・エミュレータでの動作確認 |
-| 画面のウィジェット実装（動作確認は別PC） | コード生成（`build_runner`） |
-
-【推奨】UI の実装は「別PCでセットアップが通ってから」にしてください。動作確認できない画面コードを増やしても、後でまとめて直すことになります。
+【事実】Flutter SDK / Supabase CLI / Docker / Deno が無い環境（ブラウザだけの環境など）でも、ドキュメントの修正・SQL マイグレーションの記述・Dart / TypeScript コードの記述はできます。ただし動作確認（`flutter run`・`supabase test db`・エミュレータ）はローカル環境か CI に任せることになります。push すれば CI が自動で検証します（A-8）。
 
 ---
 
@@ -341,9 +289,8 @@ supabase functions serve sync-worker --env-file supabase\functions\.env.local
 
 | ID | 内容 | 推奨案 |
 |---|---|---|
-| `OI-05` | アプリケーション ID（`--org` の逆ドメイン）に使う法人ドメイン | A-1 の 5 と同時に決定する |
-| `OI-06` | 対応 OS 下限。A-3 の `flutter create` 後に `build.gradle` へ反映が必要 | Android 8.0（API 26）以上 |
-| `OI-17` | トークン暗号鍵の置き場所。Supabase Vault / 環境変数 / KMS | Supabase Vault |
+| `OI-05` | サービス運営主体（法人格・所在地） | ストア公開前に決定する |
+| `OI-06` | 対応 OS 下限。`app/android/` の `build.gradle` へ反映が必要 | Android 8.0（API 26）以上 |
 | `OI-43` | チャットのリアルタイム配信方式 | 当面は再取得。将来は Broadcast で通知のみ |
 
 新しく判明した未決事項は [open_issues.md](open_issues.md) に追記してください。

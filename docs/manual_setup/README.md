@@ -4,9 +4,13 @@
 クラウドやアプリ申請を初めて触る人向けに、クリックする場所まで書いている。
 
 > **このガイドの前提**
-> このリポジトリのコードは、まだ一度も本番環境にデプロイされていない。
-> 開発環境の構築手順は [../setup_checklist.md](../setup_checklist.md)、
-> 本番リリースに向けた「契約・申請・設定」はこのフォルダにある。
+> PoC 用の Web 版は Firebase Hosting へデプロイ済み（[../poc_guide.md](../poc_guide.md) 参照）。
+> ただし**ストア公開・Meta 本審査などの「本番リリース」はまだ**であり、
+> そのために必要な「契約・申請・設定」がこのフォルダにある。
+> 開発環境の構築手順は [../setup_checklist.md](../setup_checklist.md) を参照。
+>
+> **注**: 一覧のうち「(未執筆)」と付いたドキュメントはまだ存在しない。
+> リンクを開いても 404 になるので、着手時に執筆してから作業を進めること。
 
 ---
 
@@ -26,14 +30,14 @@
 | 1 | [naming.md](naming.md) | サービス名・ドメイン・パッケージ名の確定（**後から変更不可**） | **最初** |
 | 2 | [meta_instagram.md](meta_instagram.md) | Meta 開発者登録・Instagram 連携・**アプリ審査** | **最優先** |
 | 3 | [supabase.md](supabase.md) | Supabase プロジェクトの作成と本番設定 | 高 |
-| 4 | [domain.md](domain.md) | ドメイン取得と、規約ページの公開 | 高 |
-| 5 | [legal.md](legal.md) | 利用規約・プライバシーポリシー・ステマ規制対応 | 高 |
+| 4 | domain.md（未執筆） | ドメイン取得と、規約ページの公開 | 高 |
+| 5 | legal.md（未執筆） | 利用規約・プライバシーポリシー・ステマ規制対応 | 高 |
 | 6 | [gcp_firebase.md](gcp_firebase.md) | Firebase（お試し Web の Hosting・GA4 計測・FCM）の設定 | 高 |
-| 7 | [assets.md](assets.md) | アイコン・ストア画像・**審査用の操作動画** | 中 |
-| 8 | [google_play.md](google_play.md) | Google Play への申請 | 高 |
-| 9 | [admob.md](admob.md) | 広告（AdMob）の設定 | 低 |
-| 10 | [monitoring_backup.md](monitoring_backup.md) | 監視・アラート・バックアップ | 中 |
-| 11 | [release_checklist.md](release_checklist.md) | 公開当日の手順と、公開後の運用 | 公開直前 |
+| 7 | assets.md（未執筆） | アイコン・ストア画像・**審査用の操作動画** | 中 |
+| 8 | google_play.md（未執筆） | Google Play への申請 | 高 |
+| 9 | admob.md（未執筆） | 広告（AdMob）の設定 | 低 |
+| 10 | monitoring_backup.md（未執筆） | 監視・アラート・バックアップ | 中 |
+| 11 | release_checklist.md（未執筆） | 公開当日の手順と、公開後の運用 | 公開直前 |
 | 12 | [github_automation.md](github_automation.md) | GitHub 自動化（Issue から Claude・プレビュー・本番反映・APK 配布）の Secrets 設定 | 高（PoC を回す前） |
 
 ---
@@ -92,7 +96,7 @@ flowchart TD
 - [ ] 商標・既存サービスとの重複を確認した
 - [ ] ドメイン名を決めた
 - [ ] Android のパッケージ名（`applicationId`）を決めた
-- [ ] Flutter プロジェクトを決めた名前で生成し直した
+- [ ] 決めた名前が `app/`（pubspec の `name` / `applicationId`）に反映されていることを確認した
 
 → 詳細: [naming.md](naming.md)
 
@@ -105,7 +109,7 @@ flowchart TD
 - [ ] **データ削除リクエスト用のページ**を公開 URL で用意した（Meta / Play の必須要件）
 - [ ] 問い合わせ用メールアドレスが受信できることを確認した
 
-→ 詳細: [domain.md](domain.md) / [legal.md](legal.md)
+→ 詳細: domain.md / legal.md（いずれも未執筆）
 
 ### フェーズ 3: Meta（Instagram 連携）
 
@@ -155,7 +159,7 @@ flowchart TD
 - [ ] スクリーンショット（スマホ用 2〜8 枚）を撮影した
 - [ ] **Meta 審査用の操作動画**を撮影した
 
-→ 詳細: [gcp_firebase.md](gcp_firebase.md) / [assets.md](assets.md)
+→ 詳細: [gcp_firebase.md](gcp_firebase.md) / assets.md（未執筆）
 
 ### フェーズ 6: Google Play
 
@@ -172,7 +176,7 @@ flowchart TD
 - [ ] クローズドテスト（12〜20 名 × 14 日）を完了した
 - [ ] 製品版として審査に提出した
 
-→ 詳細: [google_play.md](google_play.md)
+→ 詳細: google_play.md（未執筆）
 
 ### フェーズ 7: 広告・監視
 
@@ -183,7 +187,7 @@ flowchart TD
 - [ ] Supabase の使用量アラートを設定した
 - [ ] バックアップの復元手順を一度試した
 
-→ 詳細: [admob.md](admob.md) / [monitoring_backup.md](monitoring_backup.md)
+→ 詳細: admob.md / monitoring_backup.md（いずれも未執筆）
 
 ### フェーズ 8: 公開と運用
 
@@ -192,7 +196,7 @@ flowchart TD
 - [ ] 公開直後の動作とログを確認した
 - [ ] 年次の更新作業をカレンダーに登録した
 
-→ 詳細: [release_checklist.md](release_checklist.md)
+→ 詳細: release_checklist.md（未執筆）
 
 ---
 
@@ -271,13 +275,13 @@ flowchart TD
 | OI | 内容 | 関連ドキュメント |
 | --- | --- | --- |
 | `OI-01` | Meta アプリ審査の申請主体と事業者確認 | [meta_instagram.md](meta_instagram.md) |
-| `OI-03` | 利用規約・プライバシーポリシーの作成主体 | [legal.md](legal.md) |
-| `OI-04` | ステマ規制の強制方法 | [legal.md](legal.md) |
+| `OI-03` | 利用規約・プライバシーポリシーの作成主体 | legal.md（未執筆） |
+| `OI-04` | ステマ規制の強制方法 | legal.md（未執筆） |
 | `OI-05` | サービス運営主体（法人格・所在地） | [accounts.md](accounts.md) |
-| `OI-07` | 広告の実装方式と表示位置 | [admob.md](admob.md) |
-| `OI-08` | 投稿者の年齢制限 | [legal.md](legal.md) / [google_play.md](google_play.md) |
+| `OI-07` | 広告の実装方式と表示位置 | admob.md（未執筆） |
+| `OI-08` | 投稿者の年齢制限 | legal.md（未執筆） / google_play.md（未執筆） |
 | `OI-11` | プッシュ通知基盤 | [gcp_firebase.md](gcp_firebase.md) |
-| `OI-17` | SNS トークンの暗号化方式 | [supabase.md](supabase.md) |
+| ~~`OI-17`~~ | ~~SNS トークンの暗号化方式~~ → **決定済み**（AES-256-GCM + Supabase Secrets、[ADR-0006](../adr/0006-token-encryption.md)） | [supabase.md](supabase.md) |
 | `OI-37` | Instagram の取得可能指標の最終確認 | [meta_instagram.md](meta_instagram.md) |
 | `OI-39` | 各サービスの最新価格の確認 | このファイルの 5 章 |
 | `OI-44` | サービス名・ドメイン・パッケージ名の確定 | [naming.md](naming.md) |

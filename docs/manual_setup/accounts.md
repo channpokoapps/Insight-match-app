@@ -35,7 +35,7 @@ Supabase もドメインも Meta も Google Play も、すべて「どのアカ�
 | 連絡先メール | `support@（自分のドメイン）` | 規約、ストア、Meta 認証 |
 | 電話番号 | 事業用の番号 | Meta 認証（公開情報との突合に使われる） |
 
-これらは [legal.md](legal.md) の規約と、[google_play.md](google_play.md) のストア掲載で必ず必要になる。
+これらは legal.md（未執筆）の規約と、google_play.md（未執筆）のストア掲載で必ず必要になる。
 
 ---
 
@@ -67,12 +67,12 @@ Supabase もドメインも Meta も Google Play も、すべて「どのアカ�
 | 4 | **Facebook（Meta）個人アカウント** | <https://www.facebook.com/> | 無料 | **Instagram 連携の土台。必須** |
 | 5 | Meta ビジネスポートフォリオ | <https://business.facebook.com/> | 無料 | ビジネス認証・アプリ所有 |
 | 6 | Meta for Developers | <https://developers.facebook.com/> | 無料 | アプリ作成・審査申請 |
-| 7 | ドメインレジストラ | [domain.md](domain.md) 参照 | 年 2,000〜4,000 円 | 規約 URL・OAuth リダイレクト |
+| 7 | ドメインレジストラ | domain.md（未執筆）参照 | 年 2,000〜4,000 円 | 規約 URL・OAuth リダイレクト |
 | 8 | Google Play Console | <https://play.google.com/console/> | $25（初回のみ） | Android アプリの公開 |
 | 9 | Firebase | <https://console.firebase.google.com/> | 無料（FCM のみなら） | プッシュ通知 |
 | 10 | AdMob | <https://admob.google.com/> | 無料 | アプリ内広告（`OI-07`） |
 | 11 | Google グループ | <https://groups.google.com/> | 無料 | クローズドテストのテスター管理 |
-| 12 | メール受信手段 | [domain.md](domain.md) 参照 | 無料〜月 800 円 | 問い合わせ窓口 |
+| 12 | メール受信手段 | domain.md（未執筆）参照 | 無料〜月 800 円 | 問い合わせ窓口 |
 | 13 | Apple Developer（将来） | <https://developer.apple.com/> | 年 $99 | iOS 版（初期スコープ外） |
 
 **3〜12 はすべて、1 の運用専用 Google アカウント（または 2 の GitHub アカウント）で登録する。**
@@ -129,7 +129,7 @@ Supabase もドメインも Meta も Google Play も、すべて「どのアカ�
 | 12 | AdMob アプリ ID / 広告ユニット ID | 再取得は可能 |
 
 > **`upload-keystore.jks` そのもの（ファイル）も忘れずにバックアップする。**
-> 詳細は [monitoring_backup.md](monitoring_backup.md)。
+> 詳細は monitoring_backup.md（未執筆）。
 
 ### 保管してはいけない場所
 
@@ -153,7 +153,7 @@ Supabase もドメインも Meta も Google Play も、すべて「どのアカ�
 
 - [ ] カードの有効期限をカレンダーに登録する（**期限切れでドメインが失効すると、規約 URL も OAuth も同時に死ぬ**）
 - [ ] カードの利用通知（メール / アプリ通知）をオンにする
-- [ ] Supabase の使用量アラートを設定する（[monitoring_backup.md](monitoring_backup.md)）
+- [ ] Supabase の使用量アラートを設定する（monitoring_backup.md（未執筆））
 
 ---
 

@@ -63,7 +63,7 @@ erDiagram
   sync_jobs ||--o{ sync_job_items : "明細"
 ```
 
-【事実】`private` の 6 テーブルはいずれも **`public` から外部キーで参照されない**。逆方向（`private` → `public.profiles` の `user_id`）のみ参照する。これにより、`public` 側のクエリから `private` に到達する経路が構造的に存在しない。
+【事実】`private` の各テーブル（8-5 節に定義する 9 テーブル）はいずれも **`public` から外部キーで参照されない**。逆方向（`private` → `public.profiles` の `user_id`）のみ参照する。これにより、`public` 側のクエリから `private` に到達する経路が構造的に存在しない。
 
 ---
 
@@ -263,7 +263,7 @@ erDiagram
 | `platform` | `text` | `instagram` / `tiktok` / `youtube` |
 | `external_account_id` | `text` | プラットフォーム側のアカウントID |
 | `account_type` | `text` | `business` / `creator` / `personal` |
-| `access_token_encrypted` | `bytea` | **暗号化必須**（`OI-17`） |
+| `access_token_encrypted` | `bytea` | **暗号化必須**。AES-256-GCM + Supabase Secrets の鍵で暗号化（`OI-17` 決定済み、ADR-0006） |
 | `refresh_token_encrypted` | `bytea` | NULL 可 |
 | `token_expires_at` | `timestamptz` | 自動更新の判定に使用 |
 | `scopes` | `text[]` | 付与されたスコープ |
@@ -312,14 +312,22 @@ erDiagram
 
 【事実】成果レポートは**このテーブルに紐づく `media_snapshots` のみ**を集計対象とする。「案件に関係ない過去投稿は開示しない」という要件を、集計クエリの WHERE 句ではなく**テーブル構造**で保証する。
 
-### 8-5-6. `private.sync_jobs` / `private.sync_job_items`
+### 8-5-6. `private.campaign_report_snapshots` — 成果レポートの集計スナップショット
+
+| カラム | 説明 |
+|---|---|
+| `campaign_id`（主キー、→ `public.campaigns.id`）, `participant_num`, `summary jsonb`, `created_at` |
+
+【事実】k-匿名性を満たす集計値のみを含むため個人情報を含まない。生データ（`media_snapshots`）削除後もレポート表示に使える。
+
+### 8-5-7. `private.sync_jobs` / `private.sync_job_items`
 
 | テーブル | 主なカラム |
 |---|---|
 | `sync_jobs` | `id`, `started_at`, `finished_at`, `target_count`, `success_count`, `failure_count` |
 | `sync_job_items` | `id`, `job_id`, `credential_id`, `status`（`pending`/`success`/`failed`/`retry`）, `attempt`, `next_retry_at`, `error_code`, `error_message` |
 
-### 8-5-7. `private.audit_logs`
+### 8-5-8. `private.audit_logs`
 
 | カラム | 説明 |
 |---|---|
@@ -398,7 +406,7 @@ erDiagram
 |---|---|
 | `OI-09` | ジオコーディング手段と距離検索の実装（PostGIS / earthdistance） |
 | `OI-10` | 路線・駅マスタのデータソースとライセンス |
-| `OI-17` | トークン暗号化の方式と鍵管理 |
+| ~~`OI-17`~~ | ~~トークン暗号化の方式と鍵管理~~ → **決定済み**（AES-256-GCM + Supabase Secrets、ADR-0006） |
 | `OI-35` | オーディエンス属性を条件に使えるようにするか |
 | `OI-36` | 退会・連携解除時のインサイト削除と、過去案件レポートの整合性 |
 

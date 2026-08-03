@@ -1,5 +1,5 @@
 name: insight_match
-description: 店舗と投稿者をつなぐインフルエンサーマッチングアプリ
+description: 店舗と投稿者をつなぐ SNS マッチングアプリ(SNS Insight Matcher)
 publish_to: "none"
 version: 0.1.0+1
 

@@ -25,12 +25,15 @@
 
 **R-1〜R-5 に触れる変更を行うときは、対応するテストを `supabase/tests/` に追加すること。**
 
+> 注: `R-n` という記号は [docs/requirements/04_assumptions_and_constraints.md](docs/requirements/04_assumptions_and_constraints.md) の「法規制 R-1〜R-6」でも使われているが別物。単に「R-1」と書かれていたら、まず本ファイルの開発ルールを指すと考えてよい。
+
 ---
 
 ## 1. リポジトリ構成
 
 ```
-app/                Flutter アプリ（Android / iOS / 管理画面 Web）
+app/                Flutter アプリ（Android を先行。Web は閲覧専用のお試し版 §3。
+                    運営管理画面と iOS は将来対応 OI-15 / 12章）
 supabase/
   migrations/       DB マイグレーション（DB を変更する唯一の手段）
   functions/        Edge Functions（Deno / TypeScript）
@@ -129,8 +132,8 @@ CI では `flutter analyze` / `flutter test` / マイグレーション適用 �
 ### Cowork（AI エージェント）経由の変更
 
 - 作業ブランチは `claude/<内容を表すslug>` で切る。
-- `claude/**` ブランチが push されると `.github/workflows/auto-pr.yml` が自動発火し、`main` 向け PR を自動作成する。PR 作成後は既存の `ci.yml`（`flutter analyze`/`test`、マイグレーション適用、`supabase/tests/`）が通常どおり走る。
-- Cowork のサンドボックスは GitHub へのネットワークアクセスがブロックされているため、`git push` はユーザー自身の端末から行う。commit の生成（メッセージ含む）まではエージェントが行い、push 以降（PR 作成・CI）は GitHub Actions 側で自動化する、という分担。
+- `claude/**` ブランチが push されると `.github/workflows/auto-pr.yml` が自動発火し、`main` 向け PR を自動作成する（クラウドセッションから直接 PR を作った場合は重複しないようスキップされる）。PR 作成後は既存の `ci.yml`（`flutter analyze`/`test`、マイグレーション適用、`supabase/tests/`）が通常どおり走る。
+- push の主体は環境による。**クラウドセッション（Claude Code on the web 等）は GitHub へ直接 push できる**。GitHub へのネットワークアクセスがブロックされたサンドボックス環境では、commit の生成までをエージェントが行い、`git push` はユーザー自身の端末から行う。
 - 自動マージは設定しない。R-1〜R-5 に関わる変更はレビュー必須のため。
 
 ---

@@ -114,7 +114,7 @@ sequenceDiagram
 
 | 項目 | 方針 |
 |---|---|
-| 保存 | `private.social_credentials.access_token_encrypted` に暗号化して保存（`OI-17`） |
+| 保存 | `private.social_credentials.access_token_encrypted` に AES-256-GCM で暗号化して保存（`OI-17` 決定済み、ADR-0006） |
 | 有効期限 | `token_expires_at` を保持し、期限の N 日前にバッチで自動更新（`FR-SNS-07`） |
 | 失効検知 | API 呼び出しで認可エラーを受けたら `status = reauth_required` に更新し、投稿者へ通知 |
 | 失効時の挙動 | 新規応募を不可にする。進行中案件のチャット・投稿は継続可能 |
@@ -254,7 +254,7 @@ graph LR
 | `OI-09` | ジオコーディング手段 |
 | `OI-10` | 駅・路線データのデータソース |
 | `OI-11` | プッシュ通知基盤 |
-| `OI-17` | トークン暗号化方式 |
+| ~~`OI-17`~~ | ~~トークン暗号化方式~~ → **決定済み**（AES-256-GCM + Supabase Secrets、ADR-0006） |
 | `OI-37` | Instagram の取得可能インサイト指標の最終確認（実装着手時） |
 
 詳細は [open_issues.md](../open_issues.md) を参照。
