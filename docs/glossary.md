@@ -1,6 +1,6 @@
 # 用語集
 
-**最終更新**：2026-07-31
+**最終更新**：2026-08-03
 
 【事実】本ファイルは本プロジェクトで使用する用語の**唯一の定義元**である。要件定義書・ADR・コード・Issue のすべてで、ここに定義された表記に統一する。
 
@@ -84,10 +84,20 @@
 | **アプリ審査（App Review）** | Meta の審査プロセス。本番環境で一般ユーザーのデータにアクセスするために必須。目安 2〜4 週間。 |
 | **クォータ** | API 利用量の上限。YouTube Data API v3 は 1 日 10,000 クォータ単位。 |
 | **ADR** | Architecture Decision Record。アーキテクチャ上の決定とその理由を記録する文書。`docs/adr/` に格納。 |
+| **PostgREST** | PostgreSQL のテーブル・ビュー・関数を自動で REST API として公開するサーバー。Supabase の API 層の実体。**「公開スキーマ（Exposed schemas）」に含めたスキーマだけが API になる**ため、`private` を絶対に含めない（AGENTS.md R-2）。設定場所は Supabase ダッシュボードの Settings → API → Exposed schemas。 |
+| **pgTAP** | PostgreSQL 用のユニットテストフレームワーク（拡張機能）。`supabase/tests/*.test.sql` で権限・RLS・k-匿名性を機械検証するのに使う。`supabase test db` で実行される。 |
+| **Supabase Secrets** | Edge Functions から環境変数として読める秘密情報の保管場所（`supabase secrets set` で登録）。SNS トークンの暗号鍵 `TOKEN_ENCRYPTION_KEY` はここに置く（ADR-0006）。 |
+| **Vault** | Supabase の DB 内シークレット保管機能（`vault.decrypted_secrets`）。**Secrets とは別物**で、こちらは SQL（pg_cron ジョブなど）から読む値に使う。本アプリでは `project_url` / `service_role_key` を pg_cron → Edge Function 呼び出しのために置く（`0006_cron.sql`）。 |
+| **`--dart-define-from-file`** | Flutter のビルド時に JSON ファイルから環境変数を注入するオプション。本アプリは `env/local.json` 等を渡して Supabase の接続先を切り替える。ファイルを作らずに実行すると接続エラーになる。 |
+| **Cowork** | Claude（AI エージェント）にリポジトリの作業を任せる開発形態の呼び名。作業ブランチは `claude/<slug>`（AGENTS.md §6）。 |
 
 ---
 
 ## 5. 表記統一ルール
+
+日本語の文章・UI では左列の表記を使う。**コード・DB の英語識別子は別ルール**で、
+`creator` / `client` / `campaign` / `insight` を使う（[AGENTS.md](../AGENTS.md) §8）。
+つまり「識別子は `creator`、画面や文書に書くときは『投稿者』」が正しい組み合わせ。
 
 | 使う表記 | 使わない表記 |
 |---|---|
