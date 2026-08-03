@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/auth/auth_callback_trace.dart';
+import '../../../core/env/env.dart';
 import '../../../core/error/app_failure.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_theme.dart';
@@ -63,8 +65,9 @@ class _SignInPageState extends ConsumerState<SignInPage> {
   Widget build(BuildContext context) {
     // Google ログインからの復帰に失敗した場合、この画面に戻されるだけで
     // 何のフィードバックも出ないため、コールバックの失敗もここで表示する。
-    final String? message =
-        _error ?? ref.watch(authCallbackFailureProvider)?.message;
+    final AppFailure? callbackFailure = ref.watch(authCallbackFailureProvider);
+    final String? message = _error ?? callbackFailure?.message;
+    final AuthCallbackTrace trace = ref.watch(authCallbackTraceProvider);
 
     return Scaffold(
       body: SafeArea(
@@ -131,6 +134,21 @@ class _SignInPageState extends ConsumerState<SignInPage> {
                     const SizedBox(height: 12),
                     ErrorNotice(message: message),
                   ],
+                  // 認証から戻ってきた形跡があるのに失敗している場合だけ、
+                  // 切り分けに必要な最小限（戻り先ホストと理由）を出す。
+                  // 認可コードの値そのものは含めない（AGENTS.md R-7）。
+                  if (callbackFailure != null || trace.isCallback) ...<Widget>[
+                    const SizedBox(height: 8),
+                    Text(
+                      trace.describe(),
+                      style: TextStyle(
+                        fontSize: 11,
+                        height: 1.5,
+                        color: Colors.grey.shade600,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
                   const SizedBox(height: 24),
                   SubmitButton(
                     label: 'ログイン',
@@ -172,6 +190,18 @@ class _SignInPageState extends ConsumerState<SignInPage> {
                         ? null
                         : () => context.push(AppRoutes.passwordReset),
                     child: const Text('パスワードをお忘れの方'),
+                  ),
+                  const SizedBox(height: 16),
+                  // 「どのホストの、どのビルドを見ているか」を画面から判別できる
+                  // ようにする。端末キャッシュやデプロイ漏れで古い版を見たまま
+                  // 調査が空回りするのを防ぐ（PoC 期の運用都合）。
+                  Text(
+                    '${trace.host} · build ${Env.buildRev}',
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: Colors.grey.shade400,
+                    ),
+                    textAlign: TextAlign.center,
                   ),
                 ],
               ),

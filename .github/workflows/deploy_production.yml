@@ -157,7 +157,8 @@ jobs:
           flutter pub get
           flutter build web --release \
             --dart-define-from-file=../env/prod.json \
-            --dart-define-from-file=../env/web_firebase_config.json
+            --dart-define-from-file=../env/web_firebase_config.json \
+            --dart-define=BUILD_REV="${GITHUB_SHA:0:7}"
 
       - name: Firebase をセットアップ
         if: steps.detect.outputs.app == 'true' && steps.secrets.outputs.configured == 'true'

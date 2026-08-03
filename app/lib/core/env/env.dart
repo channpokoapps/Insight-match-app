@@ -21,6 +21,15 @@ class Env {
 
   static const bool isProduction = bool.fromEnvironment('IS_PRODUCTION');
 
+  /// ビルド元のコミット（CI が `--dart-define=BUILD_REV=<sha>` で埋める）。
+  ///
+  /// 端末のキャッシュやプレビューの更新漏れで「直したはずの版が動いていない」
+  /// ことに気づけず調査が空回りするため、画面から判別できるようにする。
+  static const String buildRev = String.fromEnvironment(
+    'BUILD_REV',
+    defaultValue: 'dev',
+  );
+
   static void assertConfigured() {
     if (supabaseUrl.isEmpty || supabaseAnonKey.isEmpty) {
       throw StateError(

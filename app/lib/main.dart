@@ -5,6 +5,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'core/auth/auth_callback_trace.dart';
 import 'core/env/env.dart';
 import 'core/firebase/web_firebase_options.dart';
 import 'core/router/app_router.dart';
@@ -13,6 +14,10 @@ import 'core/theme/app_theme.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   Env.assertConfigured();
+
+  // Supabase の初期化は URL のコールバックパラメータを消してしまうため、
+  // その前に痕跡を取っておく（core/auth/auth_callback_trace.dart 参照）。
+  final AuthCallbackTrace callbackTrace = AuthCallbackTrace.capture();
 
   // 旧 anon キー・新 publishable キーのどちらも渡せる（RLS 前提の公開キー）。
   await Supabase.initialize(
@@ -24,7 +29,14 @@ Future<void> main() async {
   // 未設定・初期化失敗でもアプリの起動は継続する。
   await _initializeFirebase();
 
-  runApp(const ProviderScope(child: App()));
+  runApp(
+    ProviderScope(
+      overrides: <Override>[
+        authCallbackTraceProvider.overrideWithValue(callbackTrace),
+      ],
+      child: const App(),
+    ),
+  );
 }
 
 Future<void> _initializeFirebase() async {
