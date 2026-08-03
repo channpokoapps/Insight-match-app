@@ -74,8 +74,22 @@ CI が Hosting へのデプロイと App Distribution への配布に使う鍵�
 1. [GCP コンソール → IAM → サービスアカウント](https://console.cloud.google.com/iam-admin/serviceaccounts)
    でプロジェクト `insight-match-2fbaa` を選び、**サービスアカウントを作成**。
    - 名前: `github-actions`
-   - ロール: **Firebase Hosting 管理者** と **Firebase App Distribution 管理者** の 2 つ
+   - ロール: **Firebase Hosting 管理者**（`roles/firebasehosting.admin`）と
+     **Firebase App Distribution 管理者**（`roles/firebaseappdistro.admin`）の 2 つ
      （最小権限。Auth の承認済みドメインを触る権限は意図的に与えない）
+
+   > コンソールのロール検索で見つからないときは、`gcloud` で直接付与するのが確実
+   > （App Distribution のロール ID は `firebaseappdistro` という略記で、
+   > 検索語によっては候補に出てこないことがある）:
+   >
+   > ```bash
+   > gcloud projects add-iam-policy-binding insight-match-2fbaa \
+   >   --member="serviceAccount:github-actions@insight-match-2fbaa.iam.gserviceaccount.com" \
+   >   --role="roles/firebasehosting.admin" --condition=None
+   > gcloud projects add-iam-policy-binding insight-match-2fbaa \
+   >   --member="serviceAccount:github-actions@insight-match-2fbaa.iam.gserviceaccount.com" \
+   >   --role="roles/firebaseappdistro.admin" --condition=None
+   > ```
 2. 作成したアカウントの「キー」タブ → **新しい鍵を作成 → JSON** でダウンロードする。
 3. Secrets に登録し、**ローカルの鍵ファイルは消す**。
 
