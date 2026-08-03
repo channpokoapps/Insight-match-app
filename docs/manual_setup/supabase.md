@@ -47,8 +47,26 @@ supabase db push          # supabase/migrations/ を順に適用
    - Site URL: お試し Web 版の URL（例: `https://<firebase-project>.web.app`）
    - Redirect URLs に以下を追加:
      - `https://<firebase-project>.web.app/**`
+     - `https://<firebase-project>--*.web.app/**`
+       （**Firebase Hosting のプレビューチャンネル**。`deploy_preview.yml` が
+       `https://<firebase-project>--preview-xxxxxxxx.web.app` を払い出すため、
+       ワイルドカードで登録しないとプレビュー環境でログインが完了しない。
+       詳細は [github_automation.md](github_automation.md) §4）
      - `http://localhost:*/**`（ローカル開発用）
      - `app.insightmatch.android://auth-callback`（パスワード再設定のディープリンク用）
+
+> **⚠️ Redirect URLs の登録漏れは「無言で失敗」する**
+>
+> アプリは自分のオリジン（`Uri.base.origin`）を `redirect_to` として渡す。
+> それが Redirect URLs に**一致しない**場合、Supabase はエラーを返さず
+> **Site URL へフォールバック**して戻す。
+>
+> このとき、PKCE の `code_verifier` は**ログインを開始したオリジンの
+> localStorage** にしかない。別オリジン（Site URL 側）で受け取った `?code=` は
+> 交換できずに失敗し、セッションが張られないままログイン画面に戻る。
+>
+> 症状は「Google で続行 → アカウントを選択 → 何も起きない／登録画面に進まない」。
+> **プレビュー URL で Google ログインが完了しないときは、まずここを疑う。**
 3. 本番公開前に **SMTP（独自ドメインのメール）** を設定する。既定の送信元はレート制限が厳しい。
 
 ### 4.2 Google サインイン

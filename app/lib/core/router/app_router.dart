@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../features/auth/data/profile_repository.dart';
+import '../logging/app_logger.dart';
 import '../../features/auth/domain/app_role.dart';
 import '../../features/auth/domain/registration_step.dart';
 import '../../features/auth/presentation/client_profile_form_page.dart';
@@ -123,6 +124,20 @@ final Provider<GoRouter> appRouterProvider = Provider<GoRouter>((Ref ref) {
 
   ref.listen<AsyncValue<AuthState>>(authStateProvider,
       (AsyncValue<AuthState>? previous, AsyncValue<AuthState> next) {
+    // OAuth コールバックの失敗はここにストリームエラーとして届く。
+    // 画面には汎用文言しか出さない（R-7）ため、切り分け用のコードだけ残す。
+    // 例: `bad_code_verifier` = 認可を開始したオリジンと戻り先が違う
+    //     （Supabase の Redirect URLs 未登録。docs/manual_setup/supabase.md §4.1）。
+    final Object? error = next.error;
+    if (error != null) {
+      AppLogger.error(
+        'auth.callback_failed',
+        error is AuthException
+            ? (error.code ?? 'auth_error')
+            : error.runtimeType.toString(),
+        next.stackTrace,
+      );
+    }
     // パスワード再設定メールのリンクから復旧セッションで戻ってきた場合は、
     // 通常のゲートより優先して新パスワード設定画面へ誘導する。
     if (next.valueOrNull?.event == AuthChangeEvent.passwordRecovery) {

@@ -202,3 +202,24 @@ final Provider<AuthRepository> authRepositoryProvider =
     Provider<AuthRepository>(
   (Ref ref) => AuthRepository(ref.watch(supabaseClientProvider)),
 );
+
+/// OAuth コールバックで発生した失敗。無ければ null。
+///
+/// Web の Google ログインは別ページへ遷移してから戻るため、`signInWithGoogle()`
+/// の呼び出し元には例外が返らない（呼び出したページはもう存在しない）。
+/// supabase_flutter は復帰後の `getSessionFromUrl()` の失敗を
+/// `onAuthStateChange` のストリームエラーとして通知するので、それを拾う。
+/// 拾わないと「アカウントを選んだのに何も起きない」だけの状態になり、
+/// 利用者にも開発者にも原因が見えない。
+final Provider<AppFailure?> authCallbackFailureProvider =
+    Provider<AppFailure?>((Ref ref) {
+  if (ref.watch(authStateProvider).error == null) {
+    return null;
+  }
+  // 例外の本文は内部状態を含みうるため画面には出さない（AGENTS.md R-7）。
+  // 原因の切り分けに使うコードは app_router.dart でログにだけ残す。
+  return const AppFailure(
+    FailureKind.unauthorized,
+    'ログインを完了できませんでした。お手数ですが、もう一度お試しください。',
+  );
+});
