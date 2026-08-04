@@ -8,6 +8,7 @@ import '../../../shared/widgets/retry_notice.dart';
 import '../../../shared/widgets/submit_button.dart';
 import '../data/campaign_repository.dart';
 import '../domain/campaign.dart';
+import '../domain/campaign_draft.dart';
 
 final FutureProviderFamily<CampaignDetail, String> campaignDetailProvider =
     FutureProvider.family<CampaignDetail, String>(
@@ -186,6 +187,25 @@ class _BodyState extends ConsumerState<_Body> {
                 child: Text(body.rewardDescription,
                     style: theme.textTheme.bodyMedium?.copyWith(height: 1.6)),
               ),
+              if (body.platforms.isNotEmpty)
+                _DetailSectionCard(
+                  icon: Icons.share_outlined,
+                  title: '投稿対象の SNS',
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: body.platforms
+                        .map(
+                          (String platform) => Chip(
+                            label: Text(_platformLabel(platform)),
+                            side: BorderSide.none,
+                            backgroundColor: theme.colorScheme.primary
+                                .withValues(alpha: 0.08),
+                          ),
+                        )
+                        .toList(),
+                  ),
+                ),
               _DetailSectionCard(
                 icon: Icons.edit_note,
                 title: '投稿してほしい内容',
@@ -216,9 +236,18 @@ class _BodyState extends ConsumerState<_Body> {
                       .toList(),
                 ),
               ),
+              if (body.visitStartAt != null && body.visitEndAt != null)
+                _DetailSectionCard(
+                  icon: Icons.storefront_outlined,
+                  title: '訪問期間',
+                  child: Text(
+                    '${_formatDate(body.visitStartAt!)} 〜 ${_formatDate(body.visitEndAt!)}',
+                    style: theme.textTheme.bodyMedium,
+                  ),
+                ),
               _DetailSectionCard(
                 icon: Icons.event_available,
-                title: '投稿期間',
+                title: '投稿・報告期間',
                 child: Text(
                   '${_formatDate(body.postStartAt)} 〜 ${_formatDate(body.postEndAt)}',
                   style: theme.textTheme.bodyMedium,
@@ -235,6 +264,9 @@ class _BodyState extends ConsumerState<_Body> {
     final DateTime local = value.toLocal();
     return '${local.year}/${local.month}/${local.day}';
   }
+
+  static String _platformLabel(String wireName) =>
+      CampaignPlatform.fromWireName(wireName)?.label ?? wireName;
 }
 
 /// アイコン + 見出し付きのセクションカード。情報のまとまりを視覚的に区切る。
