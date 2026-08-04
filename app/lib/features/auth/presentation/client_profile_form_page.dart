@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/error/app_failure.dart';
 import '../../../core/masters/master_repository.dart';
+import '../../../shared/widgets/genre_multi_select.dart';
 import '../../../shared/widgets/submit_button.dart';
 import '../data/profile_repository.dart';
 import '../domain/auth_validators.dart';
@@ -23,7 +24,8 @@ class _ClientProfileFormPageState extends ConsumerState<ClientProfileFormPage> {
   final TextEditingController _addressLine = TextEditingController();
   final TextEditingController _contactEmail = TextEditingController();
   final TextEditingController _description = TextEditingController();
-  int? _genreId;
+  final TextEditingController _genreOther = TextEditingController();
+  final Set<int> _genreIds = <int>{};
   int? _prefectureId;
   int? _cityId;
   bool _submitting = false;
@@ -35,13 +37,29 @@ class _ClientProfileFormPageState extends ConsumerState<ClientProfileFormPage> {
     _addressLine.dispose();
     _contactEmail.dispose();
     _description.dispose();
+    _genreOther.dispose();
     super.dispose();
+  }
+
+  /// 「その他」を選んでいるときだけ自由記述を送る。
+  String? _genreOtherText() {
+    final List<MasterItem> genres =
+        ref.read(genresProvider).valueOrNull ?? <MasterItem>[];
+    if (!GenreMultiSelect.hasOther(genres, _genreIds)) {
+      return null;
+    }
+    final String text = _genreOther.text.trim();
+    return text.isEmpty ? null : text;
   }
 
   Future<void> _save() async {
     final String storeName = _storeName.text.trim();
     if (storeName.isEmpty) {
       setState(() => _error = '店舗・企業名を入力してください。');
+      return;
+    }
+    if (_genreIds.isEmpty) {
+      setState(() => _error = 'ジャンルを 1 つ以上選んでください。');
       return;
     }
     final String contactEmail = _contactEmail.text.trim();
@@ -56,7 +74,8 @@ class _ClientProfileFormPageState extends ConsumerState<ClientProfileFormPage> {
     try {
       await ref.read(profileRepositoryProvider).saveClientProfile(
             storeName: storeName,
-            genreId: _genreId,
+            genreIds: _genreIds.toList()..sort(),
+            genreOtherText: _genreOtherText(),
             prefectureId: _prefectureId,
             cityId: _cityId,
             addressLine: _addressLine.text.trim().isEmpty
@@ -100,20 +119,22 @@ class _ClientProfileFormPageState extends ConsumerState<ClientProfileFormPage> {
                     controller: _storeName,
                     decoration: const InputDecoration(labelText: '店舗・企業名'),
                   ),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<int>(
-                    initialValue: _genreId,
-                    decoration: const InputDecoration(labelText: 'ジャンル'),
-                    items: <DropdownMenuItem<int>>[
-                      for (final MasterItem g
-                          in genres.valueOrNull ?? <MasterItem>[])
-                        DropdownMenuItem<int>(value: g.id, child: Text(g.name)),
-                    ],
-                    onChanged: _submitting
-                        ? null
-                        : (int? value) => setState(() => _genreId = value),
+                  const SizedBox(height: 16),
+                  GenreMultiSelect(
+                    label: 'ジャンル（複数選択できます）',
+                    genres: genres,
+                    selectedIds: _genreIds,
+                    otherController: _genreOther,
+                    enabled: !_submitting,
+                    onToggle: (int id, bool selected) => setState(() {
+                      if (selected) {
+                        _genreIds.add(id);
+                      } else {
+                        _genreIds.remove(id);
+                      }
+                    }),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 16),
                   DropdownButtonFormField<int>(
                     initialValue: _prefectureId,
                     decoration: const InputDecoration(labelText: '都道府県'),

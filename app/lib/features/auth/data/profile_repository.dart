@@ -96,6 +96,7 @@ class ProfileRepository {
     int? prefectureId,
     String? bio,
     List<int> preferredGenreIds = const <int>[],
+    String? genreOtherText,
   }) async {
     final String userId = _requireUserId();
     try {
@@ -107,6 +108,7 @@ class ProfileRepository {
         'prefecture_id': prefectureId,
         'bio': bio,
         'preferred_genre_ids': preferredGenreIds,
+        'genre_other_text': genreOtherText,
       });
       await _activateAccount(userId);
     } on Object catch (e, s) {
@@ -117,12 +119,18 @@ class ProfileRepository {
   }
 
   /// PR依頼者（店舗）プロフィールを保存し、アカウントを利用可能にする。
+  ///
+  /// [genreIds] は飲食ジャンルの複数選択。「その他」を選んだときだけ
+  /// [genreOtherText] に自由記述が入る（運営がマスタ昇格の判断に使う）。
   Future<void> saveClientProfile({
     required String storeName,
-    int? genreId,
+    List<int> genreIds = const <int>[],
+    String? genreOtherText,
+    String? postalCode,
     int? prefectureId,
     int? cityId,
     String? addressLine,
+    int? nearestStationId,
     String? contactEmail,
     String? description,
   }) async {
@@ -131,10 +139,13 @@ class ProfileRepository {
       await _client.from('client_profiles').upsert(<String, dynamic>{
         'user_id': userId,
         'store_name': storeName,
-        'genre_id': genreId,
+        'genre_ids': genreIds,
+        'genre_other_text': genreOtherText,
+        'postal_code': postalCode,
         'prefecture_id': prefectureId,
         'city_id': cityId,
         'address_line': addressLine,
+        'nearest_station_id': nearestStationId,
         'contact_email': contactEmail,
         'description': description,
       });

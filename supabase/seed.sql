@@ -2,16 +2,23 @@
 -- ローカル開発用のマスタデータ。`supabase db reset` で自動投入される。
 -- 個人情報・実データは絶対に含めないこと。
 
-insert into public.genres (id, name, sort_order) values
-  (1, '飲食（カフェ）', 10),
-  (2, '飲食（居酒屋・バー）', 20),
-  (3, '飲食（レストラン）', 30),
-  (4, '美容・サロン', 40),
-  (5, 'フィットネス・ジム', 50),
-  (6, '宿泊・レジャー', 60),
-  (7, '物販・小売', 70),
-  (8, 'その他', 999)
-on conflict (id) do nothing;
+-- 飲食店専用のジャンル（0011_restaurant_genres.sql と同じ内容）。
+-- マイグレーションが投入済みのため通常は何も起きない。名前で衝突を避ける。
+insert into public.genres (name, sort_order) values
+  ('和食', 10),
+  ('寿司', 20),
+  ('居酒屋', 30),
+  ('ラーメン・うどん・蕎麦', 40),
+  ('焼肉', 50),
+  ('焼き鳥・串', 60),
+  ('カフェ', 70),
+  ('イタリアン', 80),
+  ('フレンチ', 90),
+  ('中華', 100),
+  ('エスニック', 110),
+  ('テイクアウト・デリ', 120),
+  ('その他', 999)
+on conflict (name) do nothing;
 
 select setval('public.genres_id_seq', (select max(id) from public.genres));
 
