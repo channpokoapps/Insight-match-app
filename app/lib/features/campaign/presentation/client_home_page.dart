@@ -71,6 +71,164 @@ class ClientHomePage extends ConsumerWidget {
     }
   }
 
+  Future<void> _onEditPressed(
+      BuildContext context, WidgetRef ref, ClientCampaign campaign) async {
+    if (!ref
+        .read(platformCapabilityProvider)
+        .isAvailable(AppFeature.campaignManagement)) {
+      await showInstallPromptSheet(context, ref, AppFeature.campaignManagement);
+      return;
+    }
+    await context.push(AppRoutes.campaignEdit(campaign.id));
+  }
+
+  /// 一時停止・再開・複製。いずれも失敗理由をそのまま利用者に見せる。
+  Future<void> _runAction(
+    BuildContext context,
+    WidgetRef ref,
+    Future<void> Function() action,
+    String successMessage,
+  ) async {
+    try {
+      await action();
+      ref.invalidate(ownCampaignsProvider);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(successMessage)),
+        );
+      }
+    } on AppFailure catch (failure) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(failure.message)),
+        );
+      }
+    }
+  }
+
+  Future<void> _onSuspendPressed(
+      BuildContext context, WidgetRef ref, ClientCampaign campaign) async {
+    final ClientCampaignRepository repository =
+        ref.read(clientCampaignRepositoryProvider);
+    if (campaign.isSuspended) {
+      await _runAction(
+          context, ref, () => repository.resume(campaign.id), '募集を再開しました。');
+      return;
+    }
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) => AlertDialog(
+        title: const Text('募集を一時停止しますか？'),
+        content: const Text('新しい応募を受け付けなくなります。'
+            'すでに応募している投稿者はそのまま残り、停止したことが通知されます。'),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('やめる'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('一時停止する'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) {
+      return;
+    }
+    await _runAction(
+        context, ref, () => repository.suspend(campaign.id), '募集を一時停止しました。');
+  }
+
+  /// 過去案件をテンプレートとして複製し、そのまま編集画面へ送る（FR-CMP-15）。
+  Future<void> _onDuplicatePressed(
+      BuildContext context, WidgetRef ref, ClientCampaign campaign) async {
+    if (!ref
+        .read(platformCapabilityProvider)
+        .isAvailable(AppFeature.campaignManagement)) {
+      await showInstallPromptSheet(context, ref, AppFeature.campaignManagement);
+      return;
+    }
+    final ClientCampaignRepository repository =
+        ref.read(clientCampaignRepositoryProvider);
+    try {
+      final EditableCampaign source = await repository.fetchForEdit(campaign.id);
+      final String newId = await repository.duplicate(source);
+      ref.invalidate(ownCampaignsProvider);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('下書きとして複製しました。期間を確認してください。')),
+        );
+        await context.push(AppRoutes.campaignEdit(newId));
+      }
+    } on AppFailure catch (failure) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(failure.message)),
+        );
+      }
+    }
+  }
+
+  Future<void> _onCancelPressed(
+      BuildContext context, WidgetRef ref, ClientCampaign campaign) async {
+    final TextEditingController reason = TextEditingController();
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) => AlertDialog(
+        title: const Text('案件を取り下げますか？'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text('「${campaign.title}」の募集を中止します。'
+                '応募中の投稿者には取り下げが通知されます。この操作は取り消せません。'),
+            const SizedBox(height: 12),
+            TextField(
+              controller: reason,
+              decoration: const InputDecoration(
+                labelText: '理由（任意・投稿者に通知されます）',
+              ),
+            ),
+          ],
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('やめる'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('取り下げる'),
+          ),
+        ],
+      ),
+    );
+    final String reasonText = reason.text.trim();
+    reason.dispose();
+    if (confirmed != true || !context.mounted) {
+      return;
+    }
+    try {
+      await ref.read(clientCampaignRepositoryProvider).cancel(
+            campaign.id,
+            reason: reasonText.isEmpty ? null : reasonText,
+          );
+      ref.invalidate(ownCampaignsProvider);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('案件を取り下げました。')),
+        );
+      }
+    } on AppFailure catch (failure) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(failure.message)),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final AsyncValue<List<ClientCampaign>> campaigns =
@@ -96,6 +254,14 @@ class ClientHomePage extends ConsumerWidget {
                     campaign: items[index],
                     onPublish: (ClientCampaign campaign) =>
                         _onPublishPressed(context, ref, campaign),
+                    onEdit: (ClientCampaign campaign) =>
+                        _onEditPressed(context, ref, campaign),
+                    onCancel: (ClientCampaign campaign) =>
+                        _onCancelPressed(context, ref, campaign),
+                    onToggleSuspension: (ClientCampaign campaign) =>
+                        _onSuspendPressed(context, ref, campaign),
+                    onDuplicate: (ClientCampaign campaign) =>
+                        _onDuplicatePressed(context, ref, campaign),
                   ),
                 ),
               ),
@@ -155,10 +321,21 @@ class _EmptyState extends StatelessWidget {
 }
 
 class _CampaignCard extends StatelessWidget {
-  const _CampaignCard({required this.campaign, required this.onPublish});
+  const _CampaignCard({
+    required this.campaign,
+    required this.onPublish,
+    required this.onEdit,
+    required this.onCancel,
+    required this.onToggleSuspension,
+    required this.onDuplicate,
+  });
 
   final ClientCampaign campaign;
   final ValueChanged<ClientCampaign> onPublish;
+  final ValueChanged<ClientCampaign> onEdit;
+  final ValueChanged<ClientCampaign> onCancel;
+  final ValueChanged<ClientCampaign> onToggleSuspension;
+  final ValueChanged<ClientCampaign> onDuplicate;
 
   static String _formatDate(DateTime value) {
     final DateTime local = value.toLocal();
@@ -230,17 +407,47 @@ class _CampaignCard extends StatelessWidget {
               style: theme.textTheme.bodySmall
                   ?.copyWith(color: Colors.grey.shade700),
             ),
-            if (campaign.isDraft) ...<Widget>[
-              const SizedBox(height: 8),
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton.icon(
-                  icon: const Icon(Icons.publish_outlined, size: 18),
-                  label: const Text('公開する'),
-                  onPressed: () => onPublish(campaign),
+            const SizedBox(height: 4),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: <Widget>[
+                // 複製は完了・中止した案件でも使える（過去案件のテンプレート化）。
+                TextButton.icon(
+                  icon: const Icon(Icons.copy_outlined, size: 18),
+                  label: const Text('複製'),
+                  onPressed: () => onDuplicate(campaign),
                 ),
-              ),
-            ],
+                if (campaign.canToggleSuspension)
+                  TextButton.icon(
+                    icon: Icon(
+                      campaign.isSuspended
+                          ? Icons.play_arrow_outlined
+                          : Icons.pause_outlined,
+                      size: 18,
+                    ),
+                    label: Text(campaign.isSuspended ? '再開' : '一時停止'),
+                    onPressed: () => onToggleSuspension(campaign),
+                  ),
+                if (campaign.isEditable) ...<Widget>[
+                  TextButton.icon(
+                    icon: const Icon(Icons.edit_outlined, size: 18),
+                    label: const Text('編集'),
+                    onPressed: () => onEdit(campaign),
+                  ),
+                  if (campaign.isDraft)
+                    TextButton.icon(
+                      icon: const Icon(Icons.publish_outlined, size: 18),
+                      label: const Text('公開'),
+                      onPressed: () => onPublish(campaign),
+                    ),
+                  IconButton(
+                    tooltip: '取り下げ',
+                    icon: const Icon(Icons.delete_outline, size: 20),
+                    onPressed: () => onCancel(campaign),
+                  ),
+                ],
+              ],
+            ),
           ],
         ),
       ),

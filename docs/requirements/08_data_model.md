@@ -149,21 +149,32 @@ erDiagram
 | `criteria` | `jsonb` | NOT NULL | 投稿者条件式（8-6 参照） |
 | `original_criteria` | `jsonb` | NULL | 緩和前の条件（監査用） |
 | `quota` | `int` | NOT NULL, CHECK >= 1 | 募集人数 |
+| `platforms` | `text[]` | NOT NULL, CHECK | 投稿対象 SNS（`instagram`/`tiktok`/`youtube` の 1 つ以上） |
 | `apply_start_at` / `apply_end_at` | `timestamptz` | NOT NULL | 応募期間 |
-| `post_start_at` / `post_end_at` | `timestamptz` | NOT NULL | 投稿期間 |
+| `visit_start_at` / `visit_end_at` | `timestamptz` | NULL | 来店・訪問期間（両方 NULL か両方設定） |
+| `post_start_at` / `post_end_at` | `timestamptz` | NOT NULL | 投稿・報告期間 |
 | `required_content` | `text` | NOT NULL | 必須投稿内容 |
 | `prefecture_id` / `city_id` | `int` | FK | 検索用（店舗から複製） |
 | `location` | `geography(Point,4326)` | | 距離検索用 |
 | `nearest_station_id` | `int` | FK, NULL | |
 | `published_at` | `timestamptz` | NULL | |
+| `suspended_by` | `text` | NULL, CHECK | 一時停止した主体（`client`/`admin`）。`admin` が止めた案件は PR依頼者が再開できない |
+| `suspended_reason` | `text` | NULL | |
 | `created_at` / `updated_at` | `timestamptz` | | |
 
 **制約**：`apply_end_at <= post_start_at`、`post_start_at < post_end_at`。
+訪問期間を設定する場合は `apply_end_at <= visit_start_at < visit_end_at <= post_end_at` かつ `visit_start_at <= post_start_at`。
+`suspended_by` は `status = 'suspended'` のときのみ非 NULL。
 
 **RLS**：
 - `client`：自分の案件のみ全操作。
 - `creator`：**直接 SELECT させない**。案件の閲覧は必ず `list_campaigns_for_creator()` / `get_campaign_detail()` の RPC 経由とする。理由：`criteria` を直接読めると、他者の分布推測や条件回避の材料になるため。
 - `admin`：全件 SELECT / 停止。
+
+> 案件画像の実体は Storage の非公開バケット `campaign-images`（パス `{campaign_id}/{ファイル名}`）に置き、
+> `campaign_images.storage_path` から参照する。参照可否は `can_view_campaign_media()`、
+> 書き込み可否は `is_campaign_media_owner()`（いずれも `SECURITY DEFINER`・boolean のみ返す）で判定する。
+> 下書き案件の画像は所有者以外に見せない。
 
 ### 8-4-6. `campaign_images` / `campaign_hashtags`
 
@@ -171,6 +182,21 @@ erDiagram
 |---|---|
 | `campaign_images` | `id`, `campaign_id`, `storage_path`, `sort_order` |
 | `campaign_hashtags` | `id`, `campaign_id`, `tag`（`#` を含まない文字列）, `is_mandatory`（`#PR` 等の削除不可タグは `true`） |
+
+`is_mandatory = true` のタグは案件作成時にトリガーが自動付与し、RLS により所有者でも追加・変更・削除できない（`OI-04` ステマ規制対応）。
+
+### 8-4-6b. `criteria_templates` — 条件テンプレート（`FR-CMP-16`）
+
+| カラム | 型 | 制約 | 説明 |
+|---|---|---|---|
+| `id` | `uuid` | PK | |
+| `client_id` | `uuid` | FK → `client_profiles.user_id` | |
+| `name` | `text` | NOT NULL, UNIQUE(`client_id`,`name`) | 1〜60 文字 |
+| `criteria` | `jsonb` | NOT NULL | 条件式（8-6 参照）。保存時に `campaigns` と同じホワイトリスト検証を通す |
+| `created_at` / `updated_at` | `timestamptz` | | |
+
+**RLS**：`client` ロールの所有者のみ全操作。`creator` には一切のポリシーを作らない。
+インサイト実数値は持たない（条件式のみ）。
 
 ### 8-4-7. `applications` — 応募
 
