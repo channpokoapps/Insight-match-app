@@ -63,6 +63,7 @@
 | `OI-39` | コスト | 11章のコスト試算は概算。各サービスの最新価格の確認。 | 採用決定前に Supabase / FCM / ジオコーディング / 広告 SDK の最新価格を確認し、試算を確定する。 | 中 | 実装前 | 未着手 |
 | `OI-45` | 技術／運用 | 本番 Supabase（マイグレーション・Edge Functions）を main マージで自動デプロイするか。現状は Hosting のみ自動で、`supabase/` の変更は手動反映（`deploy_production.yml` が PR に警告コメントを出す）。 | PoC 期は手動を維持（R-1〜R-5 の防衛線を人間の操作に残す）。CI の `supabase test db` が同一 SHA で通っていることを前提に、利用者が増える前に自動化を再検討する。自動化する場合は `SUPABASE_ACCESS_TOKEN` / DB パスワードを Secrets に追加し `supabase db push` を CI から実行する。 | 中 | リリース前 | 未着手 |
 | `OI-44` | 事業／技術 | サービス名・パッケージ名の確定。ストア申請・Meta 審査・GA4 設定の前提。 | サービス名 **SNS Insight Matcher** / Dart パッケージ `insight_match` / applicationId `app.insightmatch.android` で決定（詳細は [manual_setup/naming.md](manual_setup/naming.md)）。 | 中 | リリース前 | **決定済み** |
+| `OI-47` | デザイン | アプリアイコンが Flutter 既定のまま（`app/android/.../ic_launcher.png`、`app/web/icons/Icon-*.png`、`app/assets/images/` は空）。認証メールのヘッダは `{{ .SiteURL }}/icons/Icon-192.png` を参照しているため、差し替えるとメールの見た目にも反映される。 | ブランドカラー（`AppTheme.brandGradient`）を用いた独自アイコンを作成し、Android / Web の全サイズを差し替える。ストア申請前に必要。 | 中 | リリース前 | 未着手 |
 | `OI-46` | 技術 | Flutter の `AppFailure.from` が、SQL 側 `raise exception` の**日本語文言の文字列一致**で例外種別を判定している（`app_failure.dart` / `0005_functions.sql`）。SQL のメッセージを変えると Flutter 側が黙って `unknown` に落ち、利用者向けの案内が失われる。 | `raise exception ... using errcode = '...'` でカスタム errcode を割り当て、Flutter 側は PostgrestException の `code` で分岐する方式へ移行する。 | 中 | 実装前 | 未着手 |
 
 ---

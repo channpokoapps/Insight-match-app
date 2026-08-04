@@ -1,0 +1,73 @@
+<!--
+  パスワード再設定メール。件名は supabase/config.toml の
+  [auth.email.template.recovery] で定義する。
+-->
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#FAFAFA;padding:24px 0;font-family:'Hiragino Sans','Noto Sans JP',sans-serif;">
+  <tr>
+    <td align="center">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:520px;background-color:#FFFFFF;border-radius:12px;overflow:hidden;">
+
+        <tr>
+          <td style="background-color:#DD2A7B;background-image:linear-gradient(120deg,#F58529 0%,#DD2A7B 50%,#8134AF 100%);padding:20px 24px;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td style="padding-right:12px;">
+                  <img src="{{ .SiteURL }}/icons/Icon-192.png" width="40" height="40" alt="SNS Insight Matcher"
+                       style="display:block;width:40px;height:40px;border-radius:10px;background-color:#FFFFFF;" />
+                </td>
+                <td>
+                  <span style="color:#FFFFFF;font-size:17px;font-weight:bold;letter-spacing:0.02em;">SNS Insight Matcher</span><br />
+                  <span style="color:#FFFFFF;font-size:12px;opacity:0.85;">店舗と投稿者をつなぐ SNS マッチングアプリ</span>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <tr>
+          <td style="padding:28px 24px 8px 24px;">
+            <h1 style="margin:0 0 16px 0;font-size:19px;color:#1A1A1A;">パスワード再設定のご案内</h1>
+            <p style="margin:0 0 16px 0;font-size:14px;line-height:1.8;color:#333333;">
+              SNS Insight Matcher のパスワード再設定のリクエストを受け付けました。<br />
+              下のボタンから新しいパスワードを設定してください。
+            </p>
+          </td>
+        </tr>
+
+        <tr>
+          <td align="center" style="padding:8px 24px 24px 24px;">
+            <a href="{{ .ConfirmationURL }}"
+               style="display:inline-block;background-color:#DD2A7B;color:#FFFFFF;text-decoration:none;font-size:15px;font-weight:bold;padding:14px 32px;border-radius:8px;">
+              パスワードを再設定する
+            </a>
+          </td>
+        </tr>
+
+        <tr>
+          <td style="padding:0 24px 24px 24px;">
+            <p style="margin:0 0 8px 0;font-size:12px;line-height:1.8;color:#666666;">
+              ボタンが押せない場合は、次の URL をブラウザに貼り付けてください。
+            </p>
+            <p style="margin:0 0 20px 0;font-size:12px;line-height:1.6;color:#DD2A7B;word-break:break-all;">
+              {{ .ConfirmationURL }}
+            </p>
+            <p style="margin:0;font-size:12px;line-height:1.8;color:#666666;">
+              このリンクは一定時間で無効になります。<br />
+              心当たりがない場合は、このメールを破棄してください。パスワードは変更されません。
+            </p>
+          </td>
+        </tr>
+
+        <tr>
+          <td style="border-top:1px solid #EEEEEE;padding:16px 24px;">
+            <p style="margin:0;font-size:11px;line-height:1.8;color:#999999;">
+              SNS Insight Matcher<br />
+              お問い合わせ: <a href="mailto:channpoko.apps@gmail.com" style="color:#999999;">channpoko.apps@gmail.com</a>
+            </p>
+          </td>
+        </tr>
+
+      </table>
+    </td>
+  </tr>
+</table>

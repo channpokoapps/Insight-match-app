@@ -68,6 +68,28 @@ supabase db push          # supabase/migrations/ を順に適用
 > 症状は「Google で続行 → アカウントを選択 → 何も起きない／登録画面に進まない」。
 > **プレビュー URL で Google ログインが完了しないときは、まずここを疑う。**
 3. 本番公開前に **SMTP（独自ドメインのメール）** を設定する。既定の送信元はレート制限が厳しい。
+   送信者名（From name）は **`SNS Insight Matcher`** にする。差出人がサービス名で表示されないと、
+   確認メールがフィッシングと区別できず開かれない。
+
+### 4.1.1 メールテンプレート（アプリ名入りの日本語文面）
+
+テンプレートはリポジトリの `supabase/templates/` が正であり、ローカルでは
+`supabase/config.toml` の `[auth.email.template.*]` から読み込まれる。
+**本番はダッシュボード管理なので、内容を変更したら手動で貼り直す必要がある。**
+
+Supabase **Authentication → Emails → Templates** で、以下の 3 つを差し替える。
+
+| テンプレート | Subject | 貼り付ける本文 |
+|---|---|---|
+| Confirm signup | `【SNS Insight Matcher】メールアドレスのご確認` | `supabase/templates/confirmation.html` |
+| Reset password | `【SNS Insight Matcher】パスワード再設定のご案内` | `supabase/templates/recovery.html` |
+| Change email address | `【SNS Insight Matcher】メールアドレス変更のご確認` | `supabase/templates/email_change.html` |
+
+ヘッダのアイコンは `{{ .SiteURL }}/icons/Icon-192.png`（Web 版が配信するアプリアイコン）を
+参照している。**Site URL が Web 版の公開 URL になっていること**が前提で、画像がブロックされた
+場合も alt テキストとブランド色の帯でサービス名が分かるようにしてある。
+なお現在の `Icon-192.png` は Flutter の既定アイコンのままなので、独自アイコンへの
+差し替えが必要（`docs/open_issues.md` の OI-47）。
 
 ### 4.2 Google サインイン
 
