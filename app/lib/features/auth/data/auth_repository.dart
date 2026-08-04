@@ -34,6 +34,20 @@ class AuthRepository {
   /// プロセス内で共有するフラグで多重初期化を防ぐ。
   static bool _googleSignInInitialized = false;
 
+  /// OAuth・メールリンクの戻り先 URL。http(s) で起動していない場合は null。
+  ///
+  /// 末尾の `/` が重要: Supabase の Redirect URLs は `https://host/**` の
+  /// 形式で登録されており、素の origin はパス区切りの `/` を含まないため
+  /// 一致せず、Supabase はエラーを返さずに Site URL へフォールバックする。
+  /// その場合 PKCE の code_verifier がログイン開始オリジンの localStorage に
+  /// しか無いためログインは無言で失敗する（supabase.md §4.1）。
+  static String? webRedirectUrl([Uri? base]) {
+    final Uri uri = base ?? Uri.base;
+    final bool isHttp =
+        uri.hasAuthority && (uri.scheme == 'http' || uri.scheme == 'https');
+    return isHttp ? '${uri.origin}/' : null;
+  }
+
   /// メールアドレスとパスワードでログインする。
   ///
   /// 例外:
@@ -72,7 +86,14 @@ class AuthRepository {
   /// 「確認メールを送信しました」と案内する）。
   Future<void> signUp(String email, String password) async {
     try {
-      await _client.auth.signUp(email: email.trim(), password: password);
+      // Web では確認リンクの戻り先を登録操作をしたオリジンに固定する。
+      // 渡さないと常に Site URL に着地し、プレビュー環境や localhost で
+      // 登録した場合にオリジン不一致で確認が完了しない。
+      await _client.auth.signUp(
+        email: email.trim(),
+        password: password,
+        emailRedirectTo: kIsWeb ? webRedirectUrl() : null,
+      );
     } on AuthException catch (e, s) {
       AppLogger.error('auth.sign_up_failed', e.code ?? 'auth_error', s);
       if (e.code == 'user_already_exists' || e.code == 'email_exists') {
@@ -102,7 +123,12 @@ class AuthRepository {
   /// 新パスワード設定画面へ誘導する。
   Future<void> sendPasswordResetEmail(String email) async {
     try {
-      await _client.auth.resetPasswordForEmail(email.trim());
+      // Web では再設定リンクの戻り先を操作中のオリジンに固定する（signUp と同じ理由）。
+      // Android は null のままメールリンクを Web 版（Site URL）に着地させる。
+      await _client.auth.resetPasswordForEmail(
+        email.trim(),
+        redirectTo: kIsWeb ? webRedirectUrl() : null,
+      );
     } on Object catch (e, s) {
       final AppFailure failure = AppFailure.from(e);
       AppLogger.error('auth.reset_mail_failed', failure.code, s);
@@ -147,7 +173,7 @@ class AuthRepository {
         // 戻り先はアプリの起動 URL。Supabase の Redirect URLs に登録しておく。
         return _client.auth.signInWithOAuth(
           OAuthProvider.google,
-          redirectTo: Uri.base.origin,
+          redirectTo: webRedirectUrl(),
         );
       }
       if (Env.googleWebClientId.isEmpty) {

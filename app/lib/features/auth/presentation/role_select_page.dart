@@ -40,6 +40,25 @@ class _RoleSelectPageState extends ConsumerState<RoleSelectPage> {
     }
   }
 
+  Future<void> _signOut() async {
+    setState(() {
+      _submitting = true;
+      _error = null;
+    });
+    try {
+      await ref.read(authRepositoryProvider).signOut();
+      // router の認証ゲートがログイン画面へ戻す。
+    } on Object catch (e) {
+      if (mounted) {
+        setState(() => _error = AppFailure.from(e).message);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _submitting = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -47,9 +66,7 @@ class _RoleSelectPageState extends ConsumerState<RoleSelectPage> {
         title: const Text('はじめる'),
         actions: <Widget>[
           TextButton(
-            onPressed: _submitting
-                ? null
-                : () => ref.read(authRepositoryProvider).signOut(),
+            onPressed: _submitting ? null : _signOut,
             child: const Text('ログアウト'),
           ),
         ],

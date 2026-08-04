@@ -47,17 +47,23 @@ supabase db push          # supabase/migrations/ を順に適用
    - Site URL: お試し Web 版の URL（例: `https://<firebase-project>.web.app`）
    - Redirect URLs に以下を追加:
      - `https://<firebase-project>.web.app/**`
+     - `https://<firebase-project>.web.app`（`/**` はパス区切りの `/` を要求するため、
+       素のオリジンも念のため併記して登録する）
      - `https://<firebase-project>--*.web.app/**`
        （**Firebase Hosting のプレビューチャンネル**。`deploy_preview.yml` が
        `https://<firebase-project>--preview-xxxxxxxx.web.app` を払い出すため、
        ワイルドカードで登録しないとプレビュー環境でログインが完了しない。
        詳細は [github_automation.md](github_automation.md) §4）
      - `http://localhost:*/**`（ローカル開発用）
-     - `app.insightmatch.android://auth-callback`（パスワード再設定のディープリンク用）
+     - `app.insightmatch.android://auth-callback`（**将来の Android ディープリンク用。
+       現状アプリ側に受け口（intent-filter）は未実装で、メールリンクは Web 版に着地する**）
 
 > **⚠️ Redirect URLs の登録漏れは「無言で失敗」する**
 >
-> アプリは自分のオリジン（`Uri.base.origin`）を `redirect_to` として渡す。
+> アプリは自分の起動オリジンに `/` を付けた URL（例:
+> `https://<firebase-project>.web.app/`）を `redirect_to` として渡す
+> （`auth_repository.dart` の `webRedirectUrl`。OAuth・確認メール・
+> パスワード再設定メールで共通）。
 > それが Redirect URLs に**一致しない**場合、Supabase はエラーを返さず
 > **Site URL へフォールバック**して戻す。
 >
@@ -111,6 +117,31 @@ GCP コンソール（**Firebase プロジェクトと同じ GCP プロジェク
    - Client ID / Client Secret: **ウェブ**クライアントの値
    - **Authorized Client IDs**: ウェブクライアントの Client ID を追加
      （Android は `signInWithIdToken` で検証されるため、ここにウェブ Client ID が必要）。
+
+### 4.3 トラブルシューティング: `Unable to exchange external code`
+
+Google でアカウントを選択したあと
+`?error=server_error&error_description=Unable+to+exchange+external+code`
+付きの URL で戻される場合、Supabase が Google との認可コード交換に失敗している。
+原因はほぼ確実に **Google プロバイダ設定の不整合**なので、上から順に確認する。
+
+1. **Client Secret を貼り直す**（本命）。Authentication → Providers → Google の
+   Client Secret に、GCP の**ウェブ**クライアントの現在のシークレットを貼り直す。
+   前後の空白・改行の混入や、GCP 側でシークレットをローテーションして
+   失効した古い値が残っているケースが典型。
+2. **Client ID とシークレットの対応**を確認する。Client ID がそのシークレットの
+   属するウェブクライアントと一致していること（別クライアントの ID + 別クライアントの
+   シークレットの組み合わせは交換に失敗する）。
+3. **GCP 側の承認済みリダイレクト URI** が
+   `https://<project-ref>.supabase.co/auth/v1/callback` と**完全一致**していること
+   （§4.2 の 2. 参照。末尾スラッシュの有無やプロジェクト ref の相違に注意）。
+4. **Authorized Client IDs** にウェブクライアントの Client ID が入っていること
+   （§4.2 の 3. 参照。こちらは Android の `signInWithIdToken` 側の検証に必要）。
+
+なお「アカウントを選択したのに**エラー表示も無く**ログイン画面に戻る」場合は
+本節ではなく §4.1 の Redirect URLs 登録漏れ（無言フォールバック）を疑うこと。
+どのオリジン・どのビルドで起きたかは、ログイン画面下部の灰色の診断行
+（起動 URL のトレースとビルド識別子）で確認できる。
 
 ## 5. Edge Functions（Phase 3 以降）
 

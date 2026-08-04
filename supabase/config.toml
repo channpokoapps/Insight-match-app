@@ -34,8 +34,14 @@ file_size_limit = "10MiB"
 [auth]
 enabled = true
 site_url = "http://localhost:3000"
-# アプリのディープリンク(AndroidManifest.xml / meta-oauth の APP_RETURN_URL と揃える)
-additional_redirect_urls = ["insightmatch://sns-link"]
+# アプリのディープリンク(AndroidManifest.xml / meta-oauth の APP_RETURN_URL と揃える)。
+# localhost はアプリが redirect_to として明示する起動オリジン
+# (auth_repository.dart の webRedirectUrl)をローカルスタックでも許可するため。
+additional_redirect_urls = [
+  "insightmatch://sns-link",
+  "http://localhost:*/**",
+  "http://127.0.0.1:*/**",
+]
 jwt_expiry = 3600
 enable_refresh_token_rotation = true
 refresh_token_reuse_interval = 10
