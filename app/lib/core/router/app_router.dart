@@ -113,6 +113,13 @@ final Provider<GoRouter> appRouterProvider = Provider<GoRouter>((Ref ref) {
             builder: (BuildContext context, GoRouterState state) =>
                 const CampaignFormPage(),
           ),
+          GoRoute(
+            path: 'campaigns/:campaignId/edit',
+            builder: (BuildContext context, GoRouterState state) =>
+                CampaignFormPage(
+              campaignId: state.pathParameters['campaignId'],
+            ),
+          ),
         ],
       ),
       GoRoute(
@@ -243,6 +250,8 @@ class AppRoutes {
   static const String campaignList = '/campaigns';
   static const String clientHome = '/client';
   static const String campaignCreate = '/client/campaigns/new';
+
+  static String campaignEdit(String id) => '/client/campaigns/$id/edit';
   static const String settings = '/settings';
   static const String dataSources = '/settings/data-sources';
   static const String snsLink = '/sns-link';

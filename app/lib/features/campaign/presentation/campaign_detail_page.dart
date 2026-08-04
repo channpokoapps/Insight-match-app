@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -7,6 +8,7 @@ import '../../../shared/widgets/install_prompt.dart';
 import '../../../shared/widgets/retry_notice.dart';
 import '../../../shared/widgets/submit_button.dart';
 import '../data/campaign_repository.dart';
+import '../data/client_campaign_repository.dart';
 import '../domain/campaign.dart';
 import '../domain/campaign_draft.dart';
 
@@ -181,6 +183,10 @@ class _BodyState extends ConsumerState<_Body> {
                 ),
               )
             else ...<Widget>[
+              if (body.images.isNotEmpty) ...<Widget>[
+                _CampaignImages(paths: body.images),
+                const SizedBox(height: 12),
+              ],
               _DetailSectionCard(
                 icon: Icons.card_giftcard,
                 title: '報酬',
@@ -267,6 +273,54 @@ class _BodyState extends ConsumerState<_Body> {
 
   static String _platformLabel(String wireName) =>
       CampaignPlatform.fromWireName(wireName)?.label ?? wireName;
+}
+
+/// 案件画像（FR-CMP-11）。
+///
+/// バケットは非公開のため、表示のたびに署名付き URL を発行する。
+/// 条件を満たす投稿者にしか `images` 自体が届かない（0015 の detail）。
+class _CampaignImages extends ConsumerWidget {
+  const _CampaignImages({required this.paths});
+
+  final List<String> paths;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final AsyncValue<List<String>> urls =
+        ref.watch(campaignImageUrlsProvider(paths.join(',')));
+    return SizedBox(
+      height: 180,
+      child: urls.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (Object e, StackTrace _) => Center(
+          child: Text(
+            '画像を読み込めませんでした。',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ),
+        data: (List<String> value) => ListView.separated(
+          scrollDirection: Axis.horizontal,
+          itemCount: value.length,
+          separatorBuilder: (_, __) => const SizedBox(width: 8),
+          itemBuilder: (BuildContext context, int index) => ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: CachedNetworkImage(
+              imageUrl: value[index],
+              width: 260,
+              height: 180,
+              fit: BoxFit.cover,
+              errorWidget: (BuildContext context, String url, Object error) =>
+                  Container(
+                width: 260,
+                color: Colors.grey.shade200,
+                child: const Icon(Icons.image_not_supported_outlined),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 /// アイコン + 見出し付きのセクションカード。情報のまとまりを視覚的に区切る。

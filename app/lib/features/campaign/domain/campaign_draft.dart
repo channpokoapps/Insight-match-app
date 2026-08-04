@@ -5,6 +5,8 @@
 /// ただし最終的な担保は DB 側の制約と RLS（AGENTS.md R-8）。
 library;
 
+import '../../search/domain/criteria.dart';
+
 /// 案件の投稿対象 SNS。値域は `social_links.platform` と揃える。
 enum CampaignPlatform {
   instagram('instagram', 'Instagram'),
@@ -55,6 +57,7 @@ class CampaignDraft {
     required this.requiredContent,
     this.genreId,
     this.hashtags = const <String>[],
+    this.criteria,
     this.prefectureId,
     this.cityId,
     this.latitude,
@@ -79,6 +82,9 @@ class CampaignDraft {
   final String requiredContent;
   final int? genreId;
   final List<String> hashtags;
+
+  /// 応募条件（FR-CMP-04）。null は「条件なし＝全員が応募できる」。
+  final Criteria? criteria;
 
   // 店舗プロフィールから引き継ぐ所在地スナップショット（FR-CMP-02）。
   final int? prefectureId;
@@ -189,8 +195,42 @@ class CampaignDraft {
       'longitude': longitude,
       'nearest_station_id': nearestStationId,
       'published_at': publish ? _toWire(applyStartAt) : null,
+      ...?_criteriaJson(),
     };
   }
+
+  /// campaigns テーブルへの UPDATE 用 JSON（FR-CMP-13）。
+  ///
+  /// 状態と応募開始日時は編集で変えない。応募後に変更できない項目
+  /// （条件・人数・期間・投稿対象）もそのまま送り、可否の判定は
+  /// サーバー側のトリガーに委ねる（AGENTS.md R-8）。
+  Map<String, dynamic> toUpdateJson() => <String, dynamic>{
+        'title': title.trim(),
+        'store_name_snapshot': storeName.trim(),
+        'genre_id': genreId,
+        'reward_description': rewardDescription.trim(),
+        'reward_value_jpy': rewardValueJpy,
+        'quota': quota,
+        'platforms':
+            platforms.map((CampaignPlatform p) => p.wireName).toList()..sort(),
+        'apply_end_at': _toWire(_endOfDay(applyEndDate)),
+        'visit_start_at': _toWire(_dateOnly(visitStartDate)),
+        'visit_end_at': _toWire(_endOfDay(visitEndDate)),
+        'post_start_at': _toWire(_dateOnly(postStartDate)),
+        'post_end_at': _toWire(_endOfDay(postEndDate)),
+        'required_content': requiredContent.trim(),
+        'prefecture_id': prefectureId,
+        'city_id': cityId,
+        'latitude': latitude,
+        'longitude': longitude,
+        'nearest_station_id': nearestStationId,
+        ...?_criteriaJson(),
+      };
+
+  /// 条件が未設定なら列自体を送らず、DB の既定値（条件なし）に任せる。
+  Map<String, dynamic>? _criteriaJson() => criteria == null
+      ? null
+      : <String, dynamic>{'criteria': criteria!.toJson()};
 
   static DateTime _dateOnly(DateTime value) =>
       DateTime(value.year, value.month, value.day);

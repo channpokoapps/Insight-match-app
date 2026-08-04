@@ -71,6 +71,76 @@ class ClientHomePage extends ConsumerWidget {
     }
   }
 
+  Future<void> _onEditPressed(
+      BuildContext context, WidgetRef ref, ClientCampaign campaign) async {
+    if (!ref
+        .read(platformCapabilityProvider)
+        .isAvailable(AppFeature.campaignManagement)) {
+      await showInstallPromptSheet(context, ref, AppFeature.campaignManagement);
+      return;
+    }
+    await context.push(AppRoutes.campaignEdit(campaign.id));
+  }
+
+  Future<void> _onCancelPressed(
+      BuildContext context, WidgetRef ref, ClientCampaign campaign) async {
+    final TextEditingController reason = TextEditingController();
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) => AlertDialog(
+        title: const Text('案件を取り下げますか？'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text('「${campaign.title}」の募集を中止します。'
+                '応募中の投稿者には取り下げが通知されます。この操作は取り消せません。'),
+            const SizedBox(height: 12),
+            TextField(
+              controller: reason,
+              decoration: const InputDecoration(
+                labelText: '理由（任意・投稿者に通知されます）',
+              ),
+            ),
+          ],
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('やめる'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('取り下げる'),
+          ),
+        ],
+      ),
+    );
+    final String reasonText = reason.text.trim();
+    reason.dispose();
+    if (confirmed != true || !context.mounted) {
+      return;
+    }
+    try {
+      await ref.read(clientCampaignRepositoryProvider).cancel(
+            campaign.id,
+            reason: reasonText.isEmpty ? null : reasonText,
+          );
+      ref.invalidate(ownCampaignsProvider);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('案件を取り下げました。')),
+        );
+      }
+    } on AppFailure catch (failure) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(failure.message)),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final AsyncValue<List<ClientCampaign>> campaigns =
@@ -96,6 +166,10 @@ class ClientHomePage extends ConsumerWidget {
                     campaign: items[index],
                     onPublish: (ClientCampaign campaign) =>
                         _onPublishPressed(context, ref, campaign),
+                    onEdit: (ClientCampaign campaign) =>
+                        _onEditPressed(context, ref, campaign),
+                    onCancel: (ClientCampaign campaign) =>
+                        _onCancelPressed(context, ref, campaign),
                   ),
                 ),
               ),
@@ -155,10 +229,17 @@ class _EmptyState extends StatelessWidget {
 }
 
 class _CampaignCard extends StatelessWidget {
-  const _CampaignCard({required this.campaign, required this.onPublish});
+  const _CampaignCard({
+    required this.campaign,
+    required this.onPublish,
+    required this.onEdit,
+    required this.onCancel,
+  });
 
   final ClientCampaign campaign;
   final ValueChanged<ClientCampaign> onPublish;
+  final ValueChanged<ClientCampaign> onEdit;
+  final ValueChanged<ClientCampaign> onCancel;
 
   static String _formatDate(DateTime value) {
     final DateTime local = value.toLocal();
@@ -230,15 +311,28 @@ class _CampaignCard extends StatelessWidget {
               style: theme.textTheme.bodySmall
                   ?.copyWith(color: Colors.grey.shade700),
             ),
-            if (campaign.isDraft) ...<Widget>[
+            if (campaign.isEditable) ...<Widget>[
               const SizedBox(height: 8),
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton.icon(
-                  icon: const Icon(Icons.publish_outlined, size: 18),
-                  label: const Text('公開する'),
-                  onPressed: () => onPublish(campaign),
-                ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: <Widget>[
+                  TextButton.icon(
+                    icon: const Icon(Icons.delete_outline, size: 18),
+                    label: const Text('取り下げ'),
+                    onPressed: () => onCancel(campaign),
+                  ),
+                  TextButton.icon(
+                    icon: const Icon(Icons.edit_outlined, size: 18),
+                    label: const Text('編集'),
+                    onPressed: () => onEdit(campaign),
+                  ),
+                  if (campaign.isDraft)
+                    TextButton.icon(
+                      icon: const Icon(Icons.publish_outlined, size: 18),
+                      label: const Text('公開する'),
+                      onPressed: () => onPublish(campaign),
+                    ),
+                ],
               ),
             ],
           ],
