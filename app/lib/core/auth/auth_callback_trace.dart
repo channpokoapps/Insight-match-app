@@ -60,8 +60,14 @@ class AuthCallbackTrace {
     String? pick(String key) =>
         base.queryParameters[key] ?? fragment[key];
 
+    // `Uri.origin` は http(s) 以外や authority 無しで例外を投げる。
+    // ここは main() の最初に通るので、投げると起動そのものが死ぬ
+    // （Android の `Uri.base` は file:/// になる）。
+    final bool hasHttpOrigin = base.hasAuthority &&
+        (base.scheme == 'http' || base.scheme == 'https');
+
     return AuthCallbackTrace(
-      origin: base.hasAuthority ? base.origin : '',
+      origin: hasHttpOrigin ? base.origin : '',
       hasCode: pick('code') != null || pick('access_token') != null,
       error: pick('error') ?? pick('error_code'),
       errorDescription: pick('error_description'),

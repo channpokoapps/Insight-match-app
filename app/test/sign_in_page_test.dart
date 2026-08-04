@@ -83,6 +83,16 @@ void main() {
     expect(find.textContaining('認可コードは受信済み'), findsOneWidget);
   });
 
+  test('http(s) 以外の URL でも例外を投げない（起動を止めない）', () {
+    // Android の Uri.base は file:///... になる。Uri.origin は投げるので、
+    // ここで落ちると main() ごと死ぬ。
+    final AuthCallbackTrace trace =
+        AuthCallbackTrace.capture(Uri.parse('file:///data/user/0/app/'));
+    expect(trace.origin, isEmpty);
+    expect(trace.isCallback, isFalse);
+    expect(trace.host, '-');
+  });
+
   testWidgets('失敗の詳細（例外の中身）を画面に出さない', (WidgetTester tester) async {
     // 例外本文には内部状態が含まれうる（AGENTS.md R-7）。
     await tester.pumpWidget(
