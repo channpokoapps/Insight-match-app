@@ -30,7 +30,7 @@ erDiagram
 
   client_profiles ||--o{ campaigns : "作成する"
   genres ||--o{ campaigns : "分類"
-  genres ||--o{ client_profiles : "業種"
+  genres ||--o{ client_profiles : "ジャンル(複数)"
   campaigns ||--o{ campaign_images : "画像"
   campaigns ||--o{ campaign_hashtags : "指定タグ"
   campaigns ||--o{ applications : "応募"
@@ -49,7 +49,7 @@ erDiagram
 
   prefectures ||--o{ cities : "市区町村"
   cities ||--o{ client_profiles : "所在地"
-  lines ||--o{ stations : "駅"
+  railway_lines ||--o{ stations : "駅"
 ```
 
 ## 8-3. ER 図（private スキーマ）
@@ -91,7 +91,8 @@ erDiagram
 | `birth_date` | `date` | NOT NULL | 年齢確認用 |
 | `prefecture_id` | `int` | FK → `prefectures.id` | 居住地 |
 | `bio` | `text` | | 自己紹介 |
-| `preferred_genre_ids` | `int[]` | | 得意ジャンル |
+| `preferred_genre_ids` | `int[]` | | 得意ジャンル（複数選択） |
+| `genre_other_text` | `text` | | ジャンルで「その他」を選んだときの自由記述 |
 | `created_at` / `updated_at` | `timestamptz` | | |
 
 **RLS**：本人と admin のみ。**`client` ロールには SELECT ポリシーを一切作らない。**
@@ -102,8 +103,9 @@ erDiagram
 |---|---|---|---|
 | `user_id` | `uuid` | PK, FK → `profiles.id` | |
 | `store_name` | `text` | NOT NULL | 店名 |
-| `genre_id` | `int` | FK → `genres.id` | 業種 |
-| `postal_code` | `text` | | |
+| `genre_ids` | `int[]` | NOT NULL DEFAULT `'{}'` | 飲食ジャンル（複数選択）。GIN インデックスあり |
+| `genre_other_text` | `text` | | ジャンルで「その他」を選んだときの自由記述。運営が `list_genre_other_suggestions()` で集計しマスタへ昇格させる |
+| `postal_code` | `text` | | 入力すると住所を自動補完する |
 | `prefecture_id` | `int` | FK → `prefectures.id` | |
 | `city_id` | `int` | FK → `cities.id` | |
 | `address_line` | `text` | | 番地以降 |
@@ -113,7 +115,7 @@ erDiagram
 | `contact_email` | `text` | | |
 | `created_at` / `updated_at` | `timestamptz` | | |
 
-**RLS**：本人・admin は全項目。`creator` は SELECT 可（案件詳細に必要）だが `contact_email` は除外したビュー経由とする。
+**RLS**：本人・admin は全項目。`creator` は SELECT 可（案件詳細に必要）だが、`contact_email` と `postal_code` を除外した `v_client_public` 経由とする。
 
 ### 8-4-4. `social_links` — SNS 連携状態（**実数値・トークンは含まない**）
 
@@ -240,9 +242,9 @@ erDiagram
 
 | テーブル | 説明 |
 |---|---|
-| `genres` | ジャンル（飲食・美容 等）。`id`, `name`, `sort_order` |
-| `prefectures` / `cities` | 都道府県・市区町村マスタ |
-| `lines` / `stations` | 路線・駅マスタ（`OI-10`） |
+| `genres` | 飲食ジャンル 13 種（和食・寿司・居酒屋 ほか）。`id`, `name`, `sort_order`。`0011_restaurant_genres.sql` が投入 |
+| `prefectures` / `cities` | 都道府県 47 件・市区町村 1,902 件。`cities.id` は全国地方公共団体コードの上 5 桁。`0012_master_cities.sql` が投入 |
+| `railway_lines` / `stations` | 路線 602 件・駅 8,988 件。`railway_lines.prefecture_ids` は所属駅から集計した非正規化列（都道府県 → 路線の絞り込み用）。`0013_master_railways.sql` が投入（`OI-10` 決定済み。生成元は `scripts/build_master_data.mjs`） |
 | `device_tokens` | プッシュ通知用。`user_id`, `token`, `platform`, `updated_at` |
 | `notifications` | アプリ内通知。`user_id`, `type`, `payload jsonb`, `read_at` |
 | `terms_agreements` | 規約同意履歴。`user_id`, `terms_version`, `agreed_at` |

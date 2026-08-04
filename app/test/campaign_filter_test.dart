@@ -9,9 +9,10 @@ void main() {
         lineIds: <int>[99],
         sort: CampaignSort.rewardDesc,
       );
-      final CampaignFilter b = CampaignFilter(
-        prefectureIds: <int>[13, 27],
-        lineIds: <int>[99],
+      // const 同士だと同一インスタンスに畳まれてしまうため、実行時に組み立てる。
+      final CampaignFilter b = const CampaignFilter().copyWith(
+        prefectureIds: <int>[13, 27].toList(),
+        lineIds: <int>[99].toList(),
         sort: CampaignSort.rewardDesc,
       );
       expect(a, b);
