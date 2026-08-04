@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../../../core/error/app_failure.dart';
 import '../../../core/masters/master_repository.dart';
+import '../../../shared/widgets/genre_multi_select.dart';
 import '../../../shared/widgets/submit_button.dart';
 import '../data/profile_repository.dart';
 import '../domain/auth_validators.dart';
@@ -25,6 +26,7 @@ class _CreatorProfileFormPageState
     extends ConsumerState<CreatorProfileFormPage> {
   final TextEditingController _fullName = TextEditingController();
   final TextEditingController _bio = TextEditingController();
+  final TextEditingController _genreOther = TextEditingController();
   DateTime? _birthDate;
   int? _prefectureId;
   final Set<int> _genreIds = <int>{};
@@ -35,6 +37,7 @@ class _CreatorProfileFormPageState
   void dispose() {
     _fullName.dispose();
     _bio.dispose();
+    _genreOther.dispose();
     super.dispose();
   }
 
@@ -50,6 +53,17 @@ class _CreatorProfileFormPageState
     if (picked != null) {
       setState(() => _birthDate = picked);
     }
+  }
+
+  /// 「その他」を選んでいるときだけ自由記述を送る。
+  String? _genreOtherText() {
+    final List<MasterItem> genres =
+        ref.read(genresProvider).valueOrNull ?? <MasterItem>[];
+    if (!GenreMultiSelect.hasOther(genres, _genreIds)) {
+      return null;
+    }
+    final String text = _genreOther.text.trim();
+    return text.isEmpty ? null : text;
   }
 
   Future<void> _save() async {
@@ -79,6 +93,7 @@ class _CreatorProfileFormPageState
             prefectureId: _prefectureId,
             bio: _bio.text.trim().isEmpty ? null : _bio.text.trim(),
             preferredGenreIds: _genreIds.toList()..sort(),
+            genreOtherText: _genreOtherText(),
           );
       ref.invalidate(registrationStepProvider);
     } on AppFailure catch (failure) {
@@ -145,29 +160,19 @@ class _CreatorProfileFormPageState
                         : (int? value) => setState(() => _prefectureId = value),
                   ),
                   const SizedBox(height: 16),
-                  Text('得意なジャンル',
-                      style: Theme.of(context).textTheme.titleSmall),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 4,
-                    children: <Widget>[
-                      for (final MasterItem g
-                          in genres.valueOrNull ?? <MasterItem>[])
-                        FilterChip(
-                          label: Text(g.name),
-                          selected: _genreIds.contains(g.id),
-                          onSelected: _submitting
-                              ? null
-                              : (bool selected) => setState(() {
-                                    if (selected) {
-                                      _genreIds.add(g.id);
-                                    } else {
-                                      _genreIds.remove(g.id);
-                                    }
-                                  }),
-                        ),
-                    ],
+                  GenreMultiSelect(
+                    label: '得意なジャンル',
+                    genres: genres,
+                    selectedIds: _genreIds,
+                    otherController: _genreOther,
+                    enabled: !_submitting,
+                    onToggle: (int id, bool selected) => setState(() {
+                      if (selected) {
+                        _genreIds.add(id);
+                      } else {
+                        _genreIds.remove(id);
+                      }
+                    }),
                   ),
                   const SizedBox(height: 16),
                   TextField(

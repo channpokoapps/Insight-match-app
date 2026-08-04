@@ -19,6 +19,7 @@ class AppConfig {
   /// [androidStoreUrl] Android アプリのストア URL（空文字は未公開）。
   /// [iosStoreUrl] iOS アプリのストア URL（空文字は未公開）。
   /// [isIosAvailable] iOS 版を提供中かどうか。
+  /// [postalCodeApiBase] 郵便番号検索 API のエンドポイント。
   const AppConfig({
     required this.serviceName,
     required this.supportEmail,
@@ -28,6 +29,7 @@ class AppConfig {
     required this.androidStoreUrl,
     required this.iosStoreUrl,
     required this.isIosAvailable,
+    required this.postalCodeApiBase,
   });
 
   /// サービス名。
@@ -55,16 +57,23 @@ class AppConfig {
   /// タップ数を `ios_interest` イベントとして計測する。
   final bool isIosAvailable;
 
+  /// 郵便番号検索 API のエンドポイント。
+  ///
+  /// 店舗登録の住所入力にのみ使う。障害時は手入力にフォールバックするため、
+  /// 落ちていても登録は止まらない。提供元を変えるときはここだけ差し替える。
+  final String postalCodeApiBase;
+
   /// 既定の設定値。`config/app_config.json` と同じ内容を保持する。
   static const AppConfig defaultConfig = AppConfig(
     serviceName: 'SNS Insight Matcher',
     supportEmail: 'channpoko.apps@gmail.com',
     termsUrl: '',
     privacyUrl: '',
-    termsVersion: '2026-08-01',
+    termsVersion: '2026-08-04',
     androidStoreUrl: '',
     iosStoreUrl: '',
     isIosAvailable: false,
+    postalCodeApiBase: 'https://zipcloud.ibsnet.co.jp/api/search',
   );
 }
 

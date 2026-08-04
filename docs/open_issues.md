@@ -1,6 +1,6 @@
 # 未決事項リスト（Open Issues / TBD）
 
-**最終更新**：2026-08-03
+**最終更新**：2026-08-04
 
 【事実】本ファイルは要件定義書全章の未決事項を集約する唯一の場所である。各章には ID とタイトルのみを記載し、内容の本体はここに書く。
 
@@ -42,7 +42,7 @@
 | `OI-05` | 事業 | サービス運営主体（法人格・所在地）。利用規約・ストア申請・Meta 審査すべてで必要。 | — | 中 | リリース前 | 未着手 |
 | `OI-07` | 事業／機能 | 広告収益の実装方式（AdMob 等）と表示位置。投稿者側のみに出すか、PR依頼者側にも出すか。 | 投稿者側の案件一覧にネイティブ広告を挿入。PR依頼者側には出さない（有料機能の顧客候補のため）。 | 中 | 実装前 | 未着手 |
 | `OI-09` | 技術 | 案件の地理検索に必要な、住所 → 緯度経度変換（ジオコーディング）サービスの選定。 | PostgreSQL の `earthdistance` / PostGIS で距離計算し、ジオコーディングは案件登録時に 1 回だけ外部 API を呼ぶ（呼び出し回数を抑えコストを最小化）。 | 中 | 設計前 | 未着手 |
-| `OI-10` | 技術／法務 | 路線・駅データの入手元とライセンス（商用利用可否）。 | 国土数値情報等の公的オープンデータを優先。ライセンス条件を確認のうえマスタとして DB に取り込む。 | 中 | 設計前 | 未着手 |
+| `OI-10` | 技術／法務 | 路線・駅データの入手元とライセンス（商用利用可否）。 | **決定・実装済み**（2026-08）。市区町村は [code4fukui/address-japan](https://github.com/code4fukui/address-japan)（MIT、デジタル庁アドレス・ベース・レジストリ由来）、路線・駅は [Seo-4d696b75/station_database](https://github.com/Seo-4d696b75/station_database)（**CC BY 4.0**）。`scripts/build_master_data.mjs` が `0012` / `0013` を生成する。CC BY の表示義務は設定の「データ出典」画面で果たす。 | 中 | 設計前 | **決定済み** |
 | `OI-11` | 技術 | プッシュ通知基盤の選定。 | FCM（無料枠が大きく Flutter との親和性が高い）。Supabase 側から Edge Function 経由で送信。 | 中 | 実装前 | 未着手 |
 | `OI-13` | 運用 | キャンセル（特に直前キャンセル）時のペナルティ運用ルール。 | 初期はペナルティを課さず、キャンセル率を記録するのみ。運営が悪質な繰り返しを検知して手動で対応。 | 中 | 実装前 | 未着手 |
 | `OI-14` | 機能 | 募集人数が k（=5）未満の案件で、成果レポートをどう扱うか。数値を一切出さないと PR依頼者の体験が損なわれる。 | 個別数値は出さず、「合計値のみ（合計リーチ等）」を表示する案と、「非表示」案を比較。合計値でも人数が 1 人だと個人特定になるため、**n=1 では完全非表示**を最低ラインとする。 | 中 | 設計前 | 未着手 |
@@ -63,6 +63,7 @@
 | `OI-39` | コスト | 11章のコスト試算は概算。各サービスの最新価格の確認。 | 採用決定前に Supabase / FCM / ジオコーディング / 広告 SDK の最新価格を確認し、試算を確定する。 | 中 | 実装前 | 未着手 |
 | `OI-45` | 技術／運用 | 本番 Supabase（マイグレーション・Edge Functions）を main マージで自動デプロイするか。現状は Hosting のみ自動で、`supabase/` の変更は手動反映（`deploy_production.yml` が PR に警告コメントを出す）。 | PoC 期は手動を維持（R-1〜R-5 の防衛線を人間の操作に残す）。CI の `supabase test db` が同一 SHA で通っていることを前提に、利用者が増える前に自動化を再検討する。自動化する場合は `SUPABASE_ACCESS_TOKEN` / DB パスワードを Secrets に追加し `supabase db push` を CI から実行する。 | 中 | リリース前 | 未着手 |
 | `OI-44` | 事業／技術 | サービス名・パッケージ名の確定。ストア申請・Meta 審査・GA4 設定の前提。 | サービス名 **SNS Insight Matcher** / Dart パッケージ `insight_match` / applicationId `app.insightmatch.android` で決定（詳細は [manual_setup/naming.md](manual_setup/naming.md)）。 | 中 | リリース前 | **決定済み** |
+| `OI-47` | デザイン | アプリアイコンが Flutter 既定のまま（`app/android/.../ic_launcher.png`、`app/web/icons/Icon-*.png`、`app/assets/images/` は空）。認証メールのヘッダは `{{ .SiteURL }}/icons/Icon-192.png` を参照しているため、差し替えるとメールの見た目にも反映される。 | ブランドカラー（`AppTheme.brandGradient`）を用いた独自アイコンを作成し、Android / Web の全サイズを差し替える。ストア申請前に必要。 | 中 | リリース前 | 未着手 |
 | `OI-46` | 技術 | Flutter の `AppFailure.from` が、SQL 側 `raise exception` の**日本語文言の文字列一致**で例外種別を判定している（`app_failure.dart` / `0005_functions.sql`）。SQL のメッセージを変えると Flutter 側が黙って `unknown` に落ち、利用者向けの案内が失われる。 | `raise exception ... using errcode = '...'` でカスタム errcode を割り当て、Flutter 側は PostgrestException の `code` で分岐する方式へ移行する。 | 中 | 実装前 | 未着手 |
 
 ---

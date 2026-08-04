@@ -8,6 +8,8 @@ import '../../../core/theme/app_theme.dart';
 import '../../../shared/widgets/app_bottom_nav.dart';
 import '../../../shared/widgets/campaign_card.dart';
 import '../../../shared/widgets/retry_notice.dart';
+import '../../search/domain/campaign_filter.dart';
+import '../../search/presentation/campaign_filter_sheet.dart';
 import '../../sns_link/data/sns_link_repository.dart';
 import '../../sns_link/domain/sns_link_status.dart';
 import '../data/campaign_repository.dart';
@@ -52,12 +54,31 @@ class _CampaignListPageState extends ConsumerState<CampaignListPage> {
 
   @override
   Widget build(BuildContext context) {
-    const CampaignListQuery query = CampaignListQuery();
+    final CampaignFilter query = ref.watch(campaignFilterProvider);
     final AsyncValue<List<CampaignListItem>> campaigns =
         ref.watch(campaignListProvider(query));
 
     return Scaffold(
-      appBar: AppBar(title: const Text('案件をさがす')),
+      appBar: AppBar(
+        title: const Text('案件をさがす'),
+        actions: <Widget>[
+          IconButton(
+            tooltip: '条件をしぼりこむ',
+            icon: Badge(
+              isLabelVisible: query.isActive,
+              label: Text('${query.activeCount}'),
+              child: const Icon(Icons.tune),
+            ),
+            onPressed: () async {
+              final CampaignFilter? applied =
+                  await showCampaignFilterSheet(context, query);
+              if (applied != null) {
+                ref.read(campaignFilterProvider.notifier).apply(applied);
+              }
+            },
+          ),
+        ],
+      ),
       bottomNavigationBar: const AppBottomNav(current: AppRoutes.campaignList),
       body: campaigns.when(
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -127,12 +148,22 @@ class _CampaignListPageState extends ConsumerState<CampaignListPage> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        '新しい案件が公開されるとここに表示されます。',
+                        query.isActive
+                            ? '条件をゆるめると見つかるかもしれません。'
+                            : '新しい案件が公開されるとここに表示されます。',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                               color: Colors.grey.shade600,
                             ),
                         textAlign: TextAlign.center,
                       ),
+                      if (query.isActive) ...<Widget>[
+                        const SizedBox(height: 12),
+                        TextButton(
+                          onPressed: () =>
+                              ref.read(campaignFilterProvider.notifier).clear(),
+                          child: const Text('絞り込みを解除する'),
+                        ),
+                      ],
                     ],
                   ),
                 ),

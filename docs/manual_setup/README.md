@@ -141,6 +141,7 @@ flowchart TD
 - [ ] Edge Functions をデプロイした
 - [ ] Edge Functions のシークレットを登録した
 - [ ] Auth の設定（メール確認・リダイレクト URL・SMTP）を行った
+- [ ] メールテンプレート 3 種を `supabase/templates/` の内容で差し替えた
 - [ ] Storage のバケットとポリシーを作成した
 - [ ] `supabase/tests/` が本番マイグレーションでも通ることを確認した
 - [ ] バックアップ（PITR）を有効にした

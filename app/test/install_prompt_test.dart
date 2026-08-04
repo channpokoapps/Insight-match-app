@@ -16,6 +16,7 @@ AppConfig _config({String androidStoreUrl = '', bool iosAvailable = false}) {
     androidStoreUrl: androidStoreUrl,
     iosStoreUrl: '',
     isIosAvailable: iosAvailable,
+    postalCodeApiBase: 'https://example.test/postal',
   );
 }
 

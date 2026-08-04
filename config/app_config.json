@@ -4,8 +4,9 @@
   "support_email": "channpoko.apps@gmail.com",
   "terms_url": "",
   "privacy_url": "",
-  "terms_version": "2026-08-01",
+  "terms_version": "2026-08-04",
   "android_store_url": "",
   "ios_store_url": "",
-  "ios_available": false
+  "ios_available": false,
+  "postal_code_api_base": "https://zipcloud.ibsnet.co.jp/api/search"
 }

@@ -46,6 +46,21 @@ enable_signup = true
 double_confirm_changes = true
 enable_confirmations = true
 
+# 差出人がひと目で分かるよう、件名と本文にアプリ名を入れる。
+# 本番はダッシュボード管理のため、変更したら docs/manual_setup/supabase.md の
+# 手順で同じ内容を Auth > Email Templates に貼り直すこと。
+[auth.email.template.confirmation]
+subject = "【SNS Insight Matcher】メールアドレスのご確認"
+content_path = "./templates/confirmation.html"
+
+[auth.email.template.recovery]
+subject = "【SNS Insight Matcher】パスワード再設定のご案内"
+content_path = "./templates/recovery.html"
+
+[auth.email.template.email_change]
+subject = "【SNS Insight Matcher】メールアドレス変更のご確認"
+content_path = "./templates/email_change.html"
+
 [analytics]
 enabled = false
 

@@ -196,6 +196,12 @@ class SettingsPage extends ConsumerWidget {
                 subtitle: config.supportEmail,
                 onTap: () => _openUrl(context, 'mailto:${config.supportEmail}'),
               ),
+              // 駅データは CC BY 4.0。クレジット表示が利用条件なので必ず残すこと。
+              _MenuTile(
+                icon: Icons.dataset_outlined,
+                title: 'データ出典',
+                onTap: () => context.push(AppRoutes.dataSources),
+              ),
             ],
           ),
           const SizedBox(height: 16),
