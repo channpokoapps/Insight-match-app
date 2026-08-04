@@ -22,6 +22,14 @@ class MasterItem {
   final String name;
 }
 
+/// 住所名から突き合わせたエリアの id。突き合わなければ null。
+class ResolvedArea {
+  const ResolvedArea({this.prefectureId, this.cityId});
+
+  final int? prefectureId;
+  final int? cityId;
+}
+
 /// マスタデータの取得リポジトリ。
 class MasterRepository {
   const MasterRepository(this._client);
@@ -48,6 +56,42 @@ class MasterRepository {
     } on Object catch (e, s) {
       final AppFailure failure = AppFailure.from(e);
       AppLogger.error('master.cities_failed', failure.code, s);
+      throw failure;
+    }
+  }
+
+  /// 住所の名前（都道府県名・市区町村名）をマスタの id に突き合わせる。
+  ///
+  /// 郵便番号検索の結果を画面の選択状態へ反映するために使う。
+  /// 突き合わなければ null を返す（表記ゆれで一致しないことがあるため、
+  /// 例外にはせず手入力に任せる）。
+  Future<ResolvedArea> resolveArea({
+    required String prefectureName,
+    String cityName = '',
+  }) async {
+    try {
+      final Map<String, dynamic>? prefecture = await _client
+          .from('prefectures')
+          .select('id')
+          .eq('name', prefectureName)
+          .maybeSingle();
+      final int? prefectureId = prefecture?['id'] as int?;
+      if (prefectureId == null || cityName.isEmpty) {
+        return ResolvedArea(prefectureId: prefectureId);
+      }
+      final Map<String, dynamic>? city = await _client
+          .from('cities')
+          .select('id')
+          .eq('prefecture_id', prefectureId)
+          .eq('name', cityName)
+          .maybeSingle();
+      return ResolvedArea(
+        prefectureId: prefectureId,
+        cityId: city?['id'] as int?,
+      );
+    } on Object catch (e, s) {
+      final AppFailure failure = AppFailure.from(e);
+      AppLogger.error('master.resolve_area_failed', failure.code, s);
       throw failure;
     }
   }

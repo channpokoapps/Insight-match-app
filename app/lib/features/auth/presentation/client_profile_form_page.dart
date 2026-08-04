@@ -1,6 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/address/postal_code_repository.dart';
 import '../../../core/error/app_failure.dart';
 import '../../../core/masters/master_repository.dart';
 import '../../../shared/widgets/genre_multi_select.dart';
@@ -25,20 +29,86 @@ class _ClientProfileFormPageState extends ConsumerState<ClientProfileFormPage> {
   final TextEditingController _contactEmail = TextEditingController();
   final TextEditingController _description = TextEditingController();
   final TextEditingController _genreOther = TextEditingController();
+  final TextEditingController _postalCode = TextEditingController();
   final Set<int> _genreIds = <int>{};
   int? _prefectureId;
   int? _cityId;
   bool _submitting = false;
+  bool _lookingUp = false;
+  String? _postalNotice;
   String? _error;
 
   @override
+  void initState() {
+    super.initState();
+    _postalCode.addListener(_onPostalCodeChanged);
+  }
+
+  @override
   void dispose() {
+    _postalCode.removeListener(_onPostalCodeChanged);
     _storeName.dispose();
     _addressLine.dispose();
     _contactEmail.dispose();
     _description.dispose();
     _genreOther.dispose();
+    _postalCode.dispose();
     super.dispose();
+  }
+
+  /// 7 桁そろった時点で住所を引く。手入力を妨げないよう、失敗しても
+  /// 入力済みの値は消さず、案内だけを出す。
+  void _onPostalCodeChanged() {
+    if (normalizePostalCode(_postalCode.text).length == 7 && !_lookingUp) {
+      unawaited(_fillFromPostalCode());
+    }
+  }
+
+  Future<void> _fillFromPostalCode() async {
+    setState(() {
+      _lookingUp = true;
+      _postalNotice = null;
+    });
+    try {
+      final PostalAddress? address = await ref
+          .read(postalCodeRepositoryProvider)
+          .lookup(_postalCode.text);
+      if (address == null) {
+        if (mounted) {
+          setState(() => _postalNotice =
+              'この郵便番号の住所が見つかりませんでした。住所を直接入力してください。');
+        }
+        return;
+      }
+      final ResolvedArea area =
+          await ref.read(masterRepositoryProvider).resolveArea(
+                prefectureName: address.prefectureName,
+                cityName: address.cityName,
+              );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _prefectureId = area.prefectureId;
+        _cityId = area.cityId;
+        if (address.townName.isNotEmpty) {
+          _addressLine.text = address.townName;
+        }
+        _postalNotice = area.cityId == null
+            ? '${address.prefectureName}${address.cityName}'
+                ' 市区町村は一覧から選んでください。'
+            : null;
+      });
+    } on AppFailure catch (failure) {
+      if (mounted) {
+        setState(() => _postalNotice = '${failure.message}'
+            ' 住所は直接入力できます。');
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _lookingUp = false);
+      }
+    }
   }
 
   /// 「その他」を選んでいるときだけ自由記述を送る。
@@ -76,6 +146,9 @@ class _ClientProfileFormPageState extends ConsumerState<ClientProfileFormPage> {
             storeName: storeName,
             genreIds: _genreIds.toList()..sort(),
             genreOtherText: _genreOtherText(),
+            postalCode: normalizePostalCode(_postalCode.text).isEmpty
+                ? null
+                : normalizePostalCode(_postalCode.text),
             prefectureId: _prefectureId,
             cityId: _cityId,
             addressLine: _addressLine.text.trim().isEmpty
@@ -119,6 +192,38 @@ class _ClientProfileFormPageState extends ConsumerState<ClientProfileFormPage> {
                     controller: _storeName,
                     decoration: const InputDecoration(labelText: '店舗・企業名'),
                   ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _postalCode,
+                    keyboardType: TextInputType.number,
+                    inputFormatters: <TextInputFormatter>[
+                      FilteringTextInputFormatter.digitsOnly,
+                      LengthLimitingTextInputFormatter(7),
+                    ],
+                    decoration: InputDecoration(
+                      labelText: '郵便番号（任意）',
+                      helperText: '7 桁を入力すると住所を自動で入力します',
+                      helperMaxLines: 2,
+                      suffixIcon: _lookingUp
+                          ? const Padding(
+                              padding: EdgeInsets.all(12),
+                              child: SizedBox(
+                                width: 20,
+                                height: 20,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
+                              ),
+                            )
+                          : null,
+                    ),
+                  ),
+                  if (_postalNotice != null) ...<Widget>[
+                    const SizedBox(height: 4),
+                    Text(
+                      _postalNotice!,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
                   const SizedBox(height: 16),
                   GenreMultiSelect(
                     label: 'ジャンル（複数選択できます）',
@@ -136,6 +241,9 @@ class _ClientProfileFormPageState extends ConsumerState<ClientProfileFormPage> {
                   ),
                   const SizedBox(height: 16),
                   DropdownButtonFormField<int>(
+                    // 郵便番号から自動入力したときに表示へ反映させるため、
+                    // 選択値をキーにして作り直す。
+                    key: ValueKey<String>('pref-$_prefectureId'),
                     initialValue: _prefectureId,
                     decoration: const InputDecoration(labelText: '都道府県'),
                     items: <DropdownMenuItem<int>>[
@@ -153,7 +261,8 @@ class _ClientProfileFormPageState extends ConsumerState<ClientProfileFormPage> {
                   const SizedBox(height: 12),
                   DropdownButtonFormField<int>(
                     // 都道府県を変えたら市区町村の選択をリセットして作り直す。
-                    key: ValueKey<int?>(_prefectureId),
+                    // 郵便番号からの自動入力も同じ経路で表示に反映する。
+                    key: ValueKey<String>('city-$_prefectureId-$_cityId'),
                     initialValue: _cityId,
                     decoration: const InputDecoration(
                       labelText: '市区町村（任意）',
