@@ -105,6 +105,9 @@ class CampaignDetailBody {
     required this.postEndAt,
     required this.hashtags,
     required this.images,
+    this.platforms = const <String>[],
+    this.visitStartAt,
+    this.visitEndAt,
     this.latitude,
     this.longitude,
     this.nearestStationId,
@@ -122,6 +125,15 @@ class CampaignDetailBody {
         images: (json['images'] as List<dynamic>? ?? <dynamic>[])
             .map((dynamic e) => e as String)
             .toList(),
+        platforms: (json['platforms'] as List<dynamic>? ?? <dynamic>[])
+            .map((dynamic e) => e as String)
+            .toList(),
+        visitStartAt: json['visit_start_at'] == null
+            ? null
+            : DateTime.parse(json['visit_start_at'] as String),
+        visitEndAt: json['visit_end_at'] == null
+            ? null
+            : DateTime.parse(json['visit_end_at'] as String),
         latitude: (json['latitude'] as num?)?.toDouble(),
         longitude: (json['longitude'] as num?)?.toDouble(),
         nearestStationId: json['nearest_station_id'] as int?,
@@ -133,6 +145,14 @@ class CampaignDetailBody {
   final DateTime postEndAt;
   final List<String> hashtags;
   final List<String> images;
+
+  /// 投稿対象 SNS。旧 RPC からの応答では空になる。
+  final List<String> platforms;
+
+  /// 来店・訪問期間。訪問を伴わない案件では null。
+  final DateTime? visitStartAt;
+  final DateTime? visitEndAt;
+
   final double? latitude;
   final double? longitude;
   final int? nearestStationId;

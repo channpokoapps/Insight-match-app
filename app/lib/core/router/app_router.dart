@@ -16,6 +16,7 @@ import '../../features/auth/presentation/sign_up_page.dart';
 import '../../features/auth/presentation/terms_agreement_page.dart';
 import '../../features/auth/presentation/update_password_page.dart';
 import '../../features/campaign/presentation/campaign_detail_page.dart';
+import '../../features/campaign/presentation/campaign_form_page.dart';
 import '../../features/campaign/presentation/campaign_list_page.dart';
 import '../../features/campaign/presentation/client_home_page.dart';
 import '../../features/settings/presentation/data_sources_page.dart';
@@ -106,6 +107,13 @@ final Provider<GoRouter> appRouterProvider = Provider<GoRouter>((Ref ref) {
         path: AppRoutes.clientHome,
         builder: (BuildContext context, GoRouterState state) =>
             const ClientHomePage(),
+        routes: <RouteBase>[
+          GoRoute(
+            path: 'campaigns/new',
+            builder: (BuildContext context, GoRouterState state) =>
+                const CampaignFormPage(),
+          ),
+        ],
       ),
       GoRoute(
         path: AppRoutes.settings,
@@ -214,7 +222,7 @@ String? _redirect(Ref ref, GoRouterState state) {
         return AppRoutes.clientHome;
       }
       if (registration.role != AppRole.client &&
-          location == AppRoutes.clientHome) {
+          location.startsWith(AppRoutes.clientHome)) {
         return AppRoutes.campaignList;
       }
       return null;
@@ -234,6 +242,7 @@ class AppRoutes {
   static const String registerDetails = '/register/details';
   static const String campaignList = '/campaigns';
   static const String clientHome = '/client';
+  static const String campaignCreate = '/client/campaigns/new';
   static const String settings = '/settings';
   static const String dataSources = '/settings/data-sources';
   static const String snsLink = '/sns-link';
