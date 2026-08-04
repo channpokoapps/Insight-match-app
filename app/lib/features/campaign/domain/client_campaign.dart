@@ -20,6 +20,7 @@ class ClientCampaign {
     this.visitStartAt,
     this.visitEndAt,
     this.publishedAt,
+    this.suspendedBy,
   });
 
   factory ClientCampaign.fromJson(Map<String, dynamic> json) => ClientCampaign(
@@ -44,6 +45,7 @@ class ClientCampaign {
         publishedAt: json['published_at'] == null
             ? null
             : DateTime.parse(json['published_at'] as String),
+        suspendedBy: json['suspended_by'] as String?,
       );
 
   final String id;
@@ -60,7 +62,12 @@ class ClientCampaign {
   final DateTime? visitEndAt;
   final DateTime? publishedAt;
 
+  /// 一時停止した主体（`client` / `admin`）。停止中でなければ null。
+  final String? suspendedBy;
+
   bool get isDraft => status == 'draft';
+
+  bool get isSuspended => status == 'suspended';
 
   /// 編集・取り下げができる状態か。完了・中止後は変更させない。
   bool get isEditable => const <String>{
@@ -68,7 +75,14 @@ class ClientCampaign {
         'recruiting',
         'screening',
         'relaxation_proposed',
+        'suspended',
       }.contains(status);
+
+  /// 一時停止・再開の操作を出してよい状態か（FR-CMP-13 / T-115）。
+  ///
+  /// 運営が停止した案件は PR依頼者が再開できないため、ボタンを出さない。
+  bool get canToggleSuspension =>
+      status == 'recruiting' || (isSuspended && suspendedBy == 'client');
 
   /// 状態の表示名。想定外の値はそのまま出す（隠すより調査しやすい）。
   String get statusLabel => statusLabelOf(status);

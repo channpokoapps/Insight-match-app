@@ -199,6 +199,42 @@ class CampaignDraft {
     };
   }
 
+  /// 複製元にする（FR-CMP-15）。
+  ///
+  /// 応募締切が過ぎている案件をそのまま複製すると、応募開始が「今」になる
+  /// ため期間の整合が崩れる。**期間の長さを保ったまま**、応募締切が
+  /// [now] の 1 週間後になるよう全体をずらす。締切がまだ先なら日付は触らない。
+  /// タイトルには一覧で見分けられるよう接尾辞を付ける。
+  CampaignDraft asDuplicate({DateTime? now}) {
+    final DateTime today = _dateOnly(now ?? DateTime.now());
+    final DateTime applyEnd = _dateOnly(applyEndDate);
+    final Duration shift = applyEnd.isBefore(today)
+        ? today.add(const Duration(days: 7)).difference(applyEnd)
+        : Duration.zero;
+    return CampaignDraft(
+      title: '${title.trim()}（コピー）',
+      storeName: storeName,
+      platforms: Set<CampaignPlatform>.of(platforms),
+      rewardDescription: rewardDescription,
+      rewardValueJpy: rewardValueJpy,
+      quota: quota,
+      applyEndDate: applyEndDate.add(shift),
+      visitStartDate: visitStartDate.add(shift),
+      visitEndDate: visitEndDate.add(shift),
+      postStartDate: postStartDate.add(shift),
+      postEndDate: postEndDate.add(shift),
+      requiredContent: requiredContent,
+      genreId: genreId,
+      hashtags: List<String>.of(hashtags),
+      criteria: criteria,
+      prefectureId: prefectureId,
+      cityId: cityId,
+      latitude: latitude,
+      longitude: longitude,
+      nearestStationId: nearestStationId,
+    );
+  }
+
   /// campaigns テーブルへの UPDATE 用 JSON（FR-CMP-13）。
   ///
   /// 状態と応募開始日時は編集で変えない。応募後に変更できない項目

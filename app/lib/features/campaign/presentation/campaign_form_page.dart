@@ -13,8 +13,10 @@ import '../../../shared/widgets/submit_button.dart';
 import '../data/client_campaign_repository.dart';
 import '../domain/campaign_draft.dart';
 import '../domain/client_campaign.dart';
+import '../../search/domain/criteria.dart';
 import '../domain/criteria_editor.dart';
 import 'criteria_builder.dart';
+import 'criteria_template_sheet.dart';
 
 /// 案件の作成・編集フォーム（PR依頼者向け）。
 ///
@@ -222,6 +224,33 @@ class _CampaignFormPageState extends ConsumerState<CampaignFormPage> {
       }
       _hashtagInput.clear();
     });
+  }
+
+  /// 保存した条件式を読み込む（FR-CMP-16）。いま組み立てている条件は置き換わる。
+  Future<void> _applyTemplate() async {
+    final Criteria? picked = await showCriteriaTemplateSheet(context, ref);
+    if (picked == null || !mounted) {
+      return;
+    }
+    setState(() {
+      _criteria = CriteriaEditor.fromCriteria(picked);
+      _error = null;
+    });
+  }
+
+  Future<void> _saveTemplate() async {
+    final String? invalid = _criteria.validate();
+    if (invalid != null) {
+      setState(() => _error = invalid);
+      return;
+    }
+    final bool saved =
+        await showSaveTemplateDialog(context, ref, _criteria.toCriteria());
+    if (saved && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('条件をテンプレートとして保存しました。')),
+      );
+    }
   }
 
   Future<void> _pickImage() async {
@@ -478,6 +507,21 @@ class _CampaignFormPageState extends ConsumerState<CampaignFormPage> {
                       ?.copyWith(color: Colors.grey.shade600, height: 1.5),
                 ),
                 const SizedBox(height: 12),
+                Row(
+                  children: <Widget>[
+                    TextButton.icon(
+                      icon: const Icon(Icons.bookmark_border, size: 18),
+                      label: const Text('保存した条件から選ぶ'),
+                      onPressed: termsEnabled ? _applyTemplate : null,
+                    ),
+                    const Spacer(),
+                    TextButton.icon(
+                      icon: const Icon(Icons.save_outlined, size: 18),
+                      label: const Text('この条件を保存'),
+                      onPressed: _submitting ? null : _saveTemplate,
+                    ),
+                  ],
+                ),
                 CriteriaBuilder(
                   editor: _criteria,
                   enabled: termsEnabled,

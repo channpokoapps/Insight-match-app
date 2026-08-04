@@ -10,6 +10,7 @@ import '../../search/domain/criteria.dart';
 import '../../search/domain/masked_count.dart';
 import '../domain/campaign_draft.dart';
 import '../domain/client_campaign.dart';
+import '../domain/criteria_template.dart';
 
 /// 案件画像を置く Storage バケット（0016_campaign_images_and_edit.sql）。
 const String campaignImagesBucket = 'campaign-images';
@@ -185,6 +186,130 @@ class ClientCampaignRepository {
     }
   }
 
+  /// 募集を一時停止する（FR-CMP-13）。応募は残したまま新規応募だけを止める。
+  Future<void> suspend(String campaignId, {String? reason}) =>
+      _callStatusRpc(
+        'suspend_campaign',
+        <String, dynamic>{'p_campaign_id': campaignId, 'p_reason': reason},
+        logKey: 'suspend',
+        conflictMessage: '募集中の案件だけを一時停止できます。一覧を更新して状態を確認してください。',
+      );
+
+  /// 一時停止した募集を再開する。
+  ///
+  /// 運営が停止した案件はサーバー側で拒否される（FR-ADM-04）。
+  Future<void> resume(String campaignId) => _callStatusRpc(
+        'resume_campaign',
+        <String, dynamic>{'p_campaign_id': campaignId},
+        logKey: 'resume',
+        conflictMessage: '一時停止中の案件だけを再開できます。一覧を更新して状態を確認してください。',
+      );
+
+  /// 案件を複製して下書きを作る（FR-CMP-15）。
+  ///
+  /// 画像は Storage 上でコピーする。1 枚でも失敗したら案件ごと作り直させる
+  /// のではなく、コピーできた分だけを持つ下書きとして残す（作り直しは編集で行える）。
+  Future<String> duplicate(EditableCampaign source, {DateTime? now}) async {
+    final String campaignId =
+        await create(source.draft.asDuplicate(now: now), publish: false);
+    for (int i = 0; i < source.images.length; i++) {
+      final String from = source.images[i];
+      final String to = '$campaignId/${from.split('/').last}';
+      try {
+        await _client.storage.from(campaignImagesBucket).copy(from, to);
+        await _client.from('campaign_images').insert(<String, dynamic>{
+          'campaign_id': campaignId,
+          'storage_path': to,
+          'sort_order': i,
+        });
+      } on Object catch (e, s) {
+        AppLogger.error(
+            'client_campaign.duplicate_image_failed', AppFailure.from(e).code, s);
+      }
+    }
+    AppLogger.info('client_campaign.duplicated',
+        <String, Object?>{'campaign_id': campaignId});
+    return campaignId;
+  }
+
+  /// 状態を変える RPC の共通処理。
+  ///
+  /// サーバー側の状態チェックに引っかかった場合は、原因と次の行動を含む
+  /// 文言に置き換える（AGENTS.md §3）。
+  Future<void> _callStatusRpc(
+    String function,
+    Map<String, dynamic> params, {
+    required String logKey,
+    required String conflictMessage,
+  }) async {
+    try {
+      await _client.rpc<dynamic>(function, params: params);
+      AppLogger.info('client_campaign.$logKey',
+          <String, Object?>{'campaign_id': params['p_campaign_id']});
+    } on Object catch (e, s) {
+      final String raw = e.toString();
+      final AppFailure failure;
+      if (raw.contains('運営により停止されています')) {
+        failure = const AppFailure(FailureKind.unauthorized,
+            'この案件は運営により停止されています。運営にお問い合わせください。');
+      } else if (raw.contains('だけを')) {
+        failure = AppFailure(FailureKind.conflict, conflictMessage);
+      } else {
+        failure = AppFailure.from(e);
+      }
+      AppLogger.error('client_campaign.${logKey}_failed', failure.code, s);
+      throw failure;
+    }
+  }
+
+  /// 条件テンプレートの一覧（FR-CMP-16）。
+  Future<List<CriteriaTemplate>> listTemplates() async {
+    try {
+      final List<Map<String, dynamic>> rows = await _client
+          .from('criteria_templates')
+          .select('id, name, criteria, created_at')
+          .order('created_at', ascending: false);
+      return rows.map(CriteriaTemplate.fromJson).toList();
+    } on Object catch (e, s) {
+      final AppFailure failure = AppFailure.from(e);
+      AppLogger.error('client_campaign.template_list_failed', failure.code, s);
+      throw failure;
+    }
+  }
+
+  /// 条件テンプレートを保存する。同名があれば上書きする。
+  Future<void> saveTemplate(String name, Criteria criteria) async {
+    final String userId = _requireUserId();
+    try {
+      await _client.from('criteria_templates').upsert(
+        <String, dynamic>{
+          'client_id': userId,
+          'name': name.trim(),
+          'criteria': criteria.toJson(),
+        },
+        onConflict: 'client_id,name',
+      );
+    } on Object catch (e, s) {
+      final AppFailure failure = e.toString().contains('criteria:')
+          ? const AppFailure(
+              FailureKind.conflict, 'この条件は保存できません。条件の指標と値を確認してください。')
+          : AppFailure.from(e);
+      AppLogger.error('client_campaign.template_save_failed', failure.code, s);
+      throw failure;
+    }
+  }
+
+  /// 条件テンプレートを削除する。
+  Future<void> deleteTemplate(String templateId) async {
+    try {
+      await _client.from('criteria_templates').delete().eq('id', templateId);
+    } on Object catch (e, s) {
+      final AppFailure failure = AppFailure.from(e);
+      AppLogger.error('client_campaign.template_delete_failed', failure.code, s);
+      throw failure;
+    }
+  }
+
   /// 任意ハッシュタグを入れ替える。
   ///
   /// 広告表記タグ（`is_mandatory`）は RLS が削除を弾くため、
@@ -337,7 +462,8 @@ class ClientCampaignRepository {
           .from('campaigns')
           .select('id, status, title, reward_value_jpy, quota, platforms, '
               'apply_end_at, visit_start_at, visit_end_at, '
-              'post_start_at, post_end_at, published_at, created_at')
+              'post_start_at, post_end_at, published_at, created_at, '
+              'suspended_by')
           .order('created_at', ascending: false);
       return rows.map(ClientCampaign.fromJson).toList();
     } on Object catch (e, s) {
@@ -406,6 +532,12 @@ final FutureProviderFamily<EditableCampaign, String> editableCampaignProvider =
     FutureProvider.family<EditableCampaign, String>(
   (Ref ref, String campaignId) =>
       ref.watch(clientCampaignRepositoryProvider).fetchForEdit(campaignId),
+);
+
+/// 保存済みの条件テンプレート（FR-CMP-16）。
+final FutureProvider<List<CriteriaTemplate>> criteriaTemplatesProvider =
+    FutureProvider<List<CriteriaTemplate>>(
+  (Ref ref) => ref.watch(clientCampaignRepositoryProvider).listTemplates(),
 );
 
 /// 案件画像の署名付き URL。有効期限があるため autoDispose で持ち回さない。
