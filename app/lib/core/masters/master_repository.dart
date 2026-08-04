@@ -52,6 +52,9 @@ class MasterRepository {
 
   final SupabaseClient _client;
 
+  /// 1 リクエストで取得する件数。`supabase/config.toml` の `max_rows` と揃える。
+  static const int _pageSize = 100;
+
   /// ジャンル一覧を表示順で返す。
   Future<List<MasterItem>> fetchGenres() =>
       _fetchList('genres', orderBy: 'sort_order');
@@ -61,55 +64,34 @@ class MasterRepository {
       _fetchList('prefectures', orderBy: 'id');
 
   /// 指定した都道府県の市区町村一覧を返す。
-  Future<List<MasterItem>> fetchCities(int prefectureId) async {
-    try {
-      final List<Map<String, dynamic>> rows = await _client
-          .from('cities')
-          .select('id, name')
-          .eq('prefecture_id', prefectureId)
-          .order('id', ascending: true);
-      return rows.map(MasterItem.fromJson).toList();
-    } on Object catch (e, s) {
-      final AppFailure failure = AppFailure.from(e);
-      AppLogger.error('master.cities_failed', failure.code, s);
-      throw failure;
-    }
-  }
+  ///
+  /// 北海道は 194 件あり `max_rows` の 1 ページに収まらないため、
+  /// [_fetchList] のページングで全件を取り切る。
+  Future<List<MasterItem>> fetchCities(int prefectureId) => _fetchList(
+        'cities',
+        orderBy: 'id',
+        filter: (PostgrestFilterBuilder<List<Map<String, dynamic>>> query) =>
+            query.eq('prefecture_id', prefectureId),
+      );
 
   /// 指定した都道府県を通る路線の一覧を返す。
   ///
   /// 全国には同名の路線があるため、表示名には事業者を区別できる情報を
   /// 付けずに済むよう、都道府県で絞り込んでから見せる想定。
-  Future<List<MasterItem>> fetchRailwayLines(int prefectureId) async {
-    try {
-      final List<Map<String, dynamic>> rows = await _client
-          .from('railway_lines')
-          .select('id, name')
-          .contains('prefecture_ids', <int>[prefectureId])
-          .order('id', ascending: true);
-      return rows.map(MasterItem.fromJson).toList();
-    } on Object catch (e, s) {
-      final AppFailure failure = AppFailure.from(e);
-      AppLogger.error('master.railway_lines_failed', failure.code, s);
-      throw failure;
-    }
-  }
+  Future<List<MasterItem>> fetchRailwayLines(int prefectureId) => _fetchList(
+        'railway_lines',
+        orderBy: 'id',
+        filter: (PostgrestFilterBuilder<List<Map<String, dynamic>>> query) =>
+            query.contains('prefecture_ids', <int>[prefectureId]),
+      );
 
   /// 指定した路線の駅を、路線の並び順で返す。
-  Future<List<MasterItem>> fetchStations(int lineId) async {
-    try {
-      final List<Map<String, dynamic>> rows = await _client
-          .from('stations')
-          .select('id, name')
-          .eq('line_id', lineId)
-          .order('id', ascending: true);
-      return rows.map(MasterItem.fromJson).toList();
-    } on Object catch (e, s) {
-      final AppFailure failure = AppFailure.from(e);
-      AppLogger.error('master.stations_failed', failure.code, s);
-      throw failure;
-    }
-  }
+  Future<List<MasterItem>> fetchStations(int lineId) => _fetchList(
+        'stations',
+        orderBy: 'id',
+        filter: (PostgrestFilterBuilder<List<Map<String, dynamic>>> query) =>
+            query.eq('line_id', lineId),
+      );
 
   /// 駅名の部分一致で駅を探す。路線名を添えて返す。
   Future<List<StationHit>> searchStations(String query) async {
@@ -201,16 +183,38 @@ class MasterRepository {
     }
   }
 
+  /// マスタを全件取得する。
+  ///
+  /// PostgREST は `supabase/config.toml` の `max_rows`（100）で応答を打ち切る。
+  /// 打ち切りはエラーにならず**黙って件数が減る**ため、最終ページ
+  /// （取得件数がページサイズ未満）に達するまで `range` を繰り返す。
+  /// 1 ページで収まるマスタ（ジャンル・都道府県など）は 1 往復で終わる。
   Future<List<MasterItem>> _fetchList(
     String table, {
     required String orderBy,
+    PostgrestFilterBuilder<List<Map<String, dynamic>>> Function(
+      PostgrestFilterBuilder<List<Map<String, dynamic>>> query,
+    )? filter,
   }) async {
     try {
-      final List<Map<String, dynamic>> rows = await _client
-          .from(table)
-          .select('id, name')
-          .order(orderBy, ascending: true);
-      return rows.map(MasterItem.fromJson).toList();
+      final List<MasterItem> items = <MasterItem>[];
+      for (int offset = 0;; offset += _pageSize) {
+        PostgrestFilterBuilder<List<Map<String, dynamic>>> query =
+            _client.from(table).select('id, name');
+        if (filter != null) {
+          query = filter(query);
+        }
+        // id を第 2 キーにして、並び順に同値があってもページ境界で
+        // 行が重複・欠落しないようにする（genres の sort_order など）。
+        final List<Map<String, dynamic>> rows = await query
+            .order(orderBy, ascending: true)
+            .order('id', ascending: true)
+            .range(offset, offset + _pageSize - 1);
+        items.addAll(rows.map(MasterItem.fromJson));
+        if (rows.length < _pageSize) {
+          return items;
+        }
+      }
     } on Object catch (e, s) {
       final AppFailure failure = AppFailure.from(e);
       AppLogger.error('master.${table}_failed', failure.code, s);
