@@ -18,6 +18,7 @@ import '../../features/auth/presentation/update_password_page.dart';
 import '../../features/campaign/presentation/campaign_detail_page.dart';
 import '../../features/campaign/presentation/campaign_list_page.dart';
 import '../../features/campaign/presentation/client_home_page.dart';
+import '../../features/settings/presentation/data_sources_page.dart';
 import '../../features/settings/presentation/settings_page.dart';
 import '../../features/sns_link/presentation/sns_link_page.dart';
 import '../../shared/widgets/splash_page.dart';
@@ -110,6 +111,11 @@ final Provider<GoRouter> appRouterProvider = Provider<GoRouter>((Ref ref) {
         path: AppRoutes.settings,
         builder: (BuildContext context, GoRouterState state) =>
             const SettingsPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.dataSources,
+        builder: (BuildContext context, GoRouterState state) =>
+            const DataSourcesPage(),
       ),
       GoRoute(
         path: AppRoutes.snsLink,
@@ -229,6 +235,7 @@ class AppRoutes {
   static const String campaignList = '/campaigns';
   static const String clientHome = '/client';
   static const String settings = '/settings';
+  static const String dataSources = '/settings/data-sources';
   static const String snsLink = '/sns-link';
 
   static String campaignDetail(String id) => '/campaigns/$id';
