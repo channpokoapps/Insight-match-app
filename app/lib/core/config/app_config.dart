@@ -61,7 +61,7 @@ class AppConfig {
     supportEmail: 'channpoko.apps@gmail.com',
     termsUrl: '',
     privacyUrl: '',
-    termsVersion: '2026-08-01',
+    termsVersion: '2026-08-04',
     androidStoreUrl: '',
     iosStoreUrl: '',
     isIosAvailable: false,

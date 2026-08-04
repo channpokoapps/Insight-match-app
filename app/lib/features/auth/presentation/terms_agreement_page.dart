@@ -6,9 +6,12 @@ import '../../../core/config/app_config.dart';
 import '../../../core/error/app_failure.dart';
 import '../../../shared/widgets/submit_button.dart';
 import '../data/profile_repository.dart';
+import '../domain/app_role.dart';
+import '../domain/consent_terms.dart';
 
 /// 利用規約・プライバシーポリシーへの同意画面。
 ///
+/// 表示する文言は役割によって変わる（`consentSectionsFor`）。
 /// 規約バージョン（`AppConfig.termsVersion`）を記録するため、
 /// 改定時は再度この画面が表示される。
 class TermsAgreementPage extends ConsumerStatefulWidget {
@@ -54,6 +57,13 @@ class _TermsAgreementPageState extends ConsumerState<TermsAgreementPage> {
   @override
   Widget build(BuildContext context) {
     final AppConfig config = ref.watch(appConfigProvider);
+    // 役割選択の直後に表示される画面なので、登録フローが持つ役割を使う。
+    // 取得前は投稿者向けの文言を出さず、共通部分だけが見えるよう creator に倒す。
+    final AppRole role =
+        ref.watch(registrationStepProvider).valueOrNull?.role ??
+            ref.watch(myRoleProvider) ??
+            AppRole.creator;
+    final List<ConsentSection> sections = consentSectionsFor(role);
     return Scaffold(
       appBar: AppBar(title: const Text('利用規約への同意')),
       body: SafeArea(
@@ -66,44 +76,29 @@ class _TermsAgreementPageState extends ConsumerState<TermsAgreementPage> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: <Widget>[
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          Text(
-                            'ご利用にあたって',
-                            style: Theme.of(context).textTheme.titleMedium,
-                          ),
-                          const SizedBox(height: 8),
-                          const Text(
-                            '・インサイトの実数値は、条件の判定にのみ使われ、'
-                            '相手や運営を含む誰にも表示されません。\n'
-                            '・PR 投稿には #PR の明示が必要です'
-                            '（ステルスマーケティング規制対応）。\n'
-                            '・詳細は利用規約とプライバシーポリシーを'
-                            'ご確認ください。',
-                          ),
-                          const SizedBox(height: 8),
-                          Wrap(
-                            spacing: 8,
-                            children: <Widget>[
-                              TextButton(
-                                onPressed: () => _openUrl(config.termsUrl),
-                                child: const Text('利用規約'),
-                              ),
-                              TextButton(
-                                onPressed: () => _openUrl(config.privacyUrl),
-                                child: const Text('プライバシーポリシー'),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
+                  Text(
+                    '${role.label}としてご利用にあたって',
+                    style: Theme.of(context).textTheme.titleMedium,
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 12),
+                  for (final ConsentSection section in sections) ...<Widget>[
+                    _ConsentCard(section: section),
+                    const SizedBox(height: 12),
+                  ],
+                  Wrap(
+                    spacing: 8,
+                    children: <Widget>[
+                      TextButton(
+                        onPressed: () => _openUrl(config.termsUrl),
+                        child: const Text('利用規約'),
+                      ),
+                      TextButton(
+                        onPressed: () => _openUrl(config.privacyUrl),
+                        child: const Text('プライバシーポリシー'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
                   CheckboxListTile(
                     value: _checked,
                     onChanged: _submitting
@@ -111,7 +106,7 @@ class _TermsAgreementPageState extends ConsumerState<TermsAgreementPage> {
                         : (bool? value) =>
                             setState(() => _checked = value ?? false),
                     title: Text(
-                      '利用規約とプライバシーポリシー'
+                      '上記の免責事項を含む利用規約とプライバシーポリシー'
                       '（バージョン ${config.termsVersion}）に同意します',
                     ),
                     controlAffinity: ListTileControlAffinity.leading,
@@ -135,6 +130,49 @@ class _TermsAgreementPageState extends ConsumerState<TermsAgreementPage> {
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 同意文言の 1 セクション。免責は読み飛ばされないよう配色で強調する。
+class _ConsentCard extends StatelessWidget {
+  const _ConsentCard({required this.section});
+
+  final ConsentSection section;
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme scheme = Theme.of(context).colorScheme;
+    return Card(
+      color: section.isDisclaimer ? scheme.errorContainer : null,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text(
+              section.title,
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: section.isDisclaimer ? scheme.onErrorContainer : null,
+                  ),
+            ),
+            const SizedBox(height: 8),
+            for (final String bullet in section.bullets)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Text(
+                  '・$bullet',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        height: 1.6,
+                        color:
+                            section.isDisclaimer ? scheme.onErrorContainer : null,
+                      ),
+                ),
+              ),
+          ],
         ),
       ),
     );
