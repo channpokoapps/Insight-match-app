@@ -22,6 +22,22 @@ class MasterItem {
   final String name;
 }
 
+/// 駅の検索結果。同名の駅が複数の路線にあるため、路線名を添えて区別する。
+class StationHit {
+  const StationHit({
+    required this.id,
+    required this.name,
+    required this.lineName,
+  });
+
+  final int id;
+  final String name;
+  final String lineName;
+
+  /// 「阪急千里線 南千里」のような表示用ラベル。
+  String get label => lineName.isEmpty ? name : '$lineName $name';
+}
+
 /// 住所名から突き合わせたエリアの id。突き合わなければ null。
 class ResolvedArea {
   const ResolvedArea({this.prefectureId, this.cityId});
@@ -56,6 +72,95 @@ class MasterRepository {
     } on Object catch (e, s) {
       final AppFailure failure = AppFailure.from(e);
       AppLogger.error('master.cities_failed', failure.code, s);
+      throw failure;
+    }
+  }
+
+  /// 指定した都道府県を通る路線の一覧を返す。
+  ///
+  /// 全国には同名の路線があるため、表示名には事業者を区別できる情報を
+  /// 付けずに済むよう、都道府県で絞り込んでから見せる想定。
+  Future<List<MasterItem>> fetchRailwayLines(int prefectureId) async {
+    try {
+      final List<Map<String, dynamic>> rows = await _client
+          .from('railway_lines')
+          .select('id, name')
+          .contains('prefecture_ids', <int>[prefectureId])
+          .order('id', ascending: true);
+      return rows.map(MasterItem.fromJson).toList();
+    } on Object catch (e, s) {
+      final AppFailure failure = AppFailure.from(e);
+      AppLogger.error('master.railway_lines_failed', failure.code, s);
+      throw failure;
+    }
+  }
+
+  /// 指定した路線の駅を、路線の並び順で返す。
+  Future<List<MasterItem>> fetchStations(int lineId) async {
+    try {
+      final List<Map<String, dynamic>> rows = await _client
+          .from('stations')
+          .select('id, name')
+          .eq('line_id', lineId)
+          .order('id', ascending: true);
+      return rows.map(MasterItem.fromJson).toList();
+    } on Object catch (e, s) {
+      final AppFailure failure = AppFailure.from(e);
+      AppLogger.error('master.stations_failed', failure.code, s);
+      throw failure;
+    }
+  }
+
+  /// 駅名の部分一致で駅を探す。路線名を添えて返す。
+  Future<List<StationHit>> searchStations(String query) async {
+    final String keyword = query.trim();
+    if (keyword.isEmpty) {
+      return <StationHit>[];
+    }
+    try {
+      final List<Map<String, dynamic>> rows = await _client
+          .from('stations')
+          .select('id, name, railway_lines!inner(name)')
+          .ilike('name', '%$keyword%')
+          .limit(50);
+      return rows
+          .map((Map<String, dynamic> row) => StationHit(
+                id: row['id'] as int,
+                name: row['name'] as String,
+                lineName:
+                    (row['railway_lines'] as Map<String, dynamic>?)?['name']
+                            as String? ??
+                        '',
+              ))
+          .toList();
+    } on Object catch (e, s) {
+      final AppFailure failure = AppFailure.from(e);
+      AppLogger.error('master.station_search_failed', failure.code, s);
+      throw failure;
+    }
+  }
+
+  /// 駅 id から「路線名 / 駅名」の表示用ラベルを引く。
+  Future<StationHit?> fetchStation(int stationId) async {
+    try {
+      final Map<String, dynamic>? row = await _client
+          .from('stations')
+          .select('id, name, railway_lines!inner(name)')
+          .eq('id', stationId)
+          .maybeSingle();
+      if (row == null) {
+        return null;
+      }
+      return StationHit(
+        id: row['id'] as int,
+        name: row['name'] as String,
+        lineName: (row['railway_lines'] as Map<String, dynamic>?)?['name']
+                as String? ??
+            '',
+      );
+    } on Object catch (e, s) {
+      final AppFailure failure = AppFailure.from(e);
+      AppLogger.error('master.station_fetch_failed', failure.code, s);
       throw failure;
     }
   }
@@ -129,4 +234,25 @@ final FutureProvider<List<MasterItem>> genresProvider =
 final FutureProvider<List<MasterItem>> prefecturesProvider =
     FutureProvider<List<MasterItem>>(
   (Ref ref) => ref.watch(masterRepositoryProvider).fetchPrefectures(),
+);
+
+/// 都道府県別の市区町村一覧。
+final FutureProviderFamily<List<MasterItem>, int> citiesProvider =
+    FutureProvider.family<List<MasterItem>, int>(
+  (Ref ref, int prefectureId) =>
+      ref.watch(masterRepositoryProvider).fetchCities(prefectureId),
+);
+
+/// 都道府県別の路線一覧。
+final FutureProviderFamily<List<MasterItem>, int> railwayLinesProvider =
+    FutureProvider.family<List<MasterItem>, int>(
+  (Ref ref, int prefectureId) =>
+      ref.watch(masterRepositoryProvider).fetchRailwayLines(prefectureId),
+);
+
+/// 路線別の駅一覧。
+final FutureProviderFamily<List<MasterItem>, int> stationsProvider =
+    FutureProvider.family<List<MasterItem>, int>(
+  (Ref ref, int lineId) =>
+      ref.watch(masterRepositoryProvider).fetchStations(lineId),
 );

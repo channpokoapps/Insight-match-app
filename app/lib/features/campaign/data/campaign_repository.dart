@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/error/app_failure.dart';
 import '../../../core/logging/app_logger.dart';
 import '../../../core/supabase/supabase_providers.dart';
+import '../../search/domain/campaign_filter.dart';
 import '../../search/domain/criteria.dart';
 import '../../search/domain/masked_count.dart';
 import '../domain/campaign.dart';
@@ -19,10 +20,11 @@ class CampaignRepository {
   final SupabaseClient _client;
 
   /// 投稿者向けの案件一覧。
+  ///
+  /// 絞り込み条件はサーバ側でも再評価される。応募条件を満たさない案件の
+  /// 報酬内容は、そもそも返ってこない（0010 / 0014）。
   Future<List<CampaignListItem>> listForCreator({
-    int? prefectureId,
-    int? genreId,
-    int? minReward,
+    CampaignFilter filter = const CampaignFilter(),
     bool includeIneligible = true,
     int limit = 20,
     int offset = 0,
@@ -31,10 +33,14 @@ class CampaignRepository {
       final dynamic result = await _client.rpc<dynamic>(
         'list_campaigns_for_creator',
         params: <String, dynamic>{
-          'p_prefecture_id': prefectureId,
-          'p_genre_id': genreId,
-          'p_min_reward': minReward,
+          'p_prefecture_ids': CampaignFilter.toParam(filter.prefectureIds),
+          'p_city_ids': CampaignFilter.toParam(filter.cityIds),
+          'p_line_ids': CampaignFilter.toParam(filter.lineIds),
+          'p_station_ids': CampaignFilter.toParam(filter.stationIds),
+          'p_genre_ids': CampaignFilter.toParam(filter.genreIds),
+          'p_min_reward': filter.minReward,
           'p_include_ineligible': includeIneligible,
+          'p_sort': filter.sort.key,
           'p_limit': limit,
           'p_offset': offset,
         },
@@ -113,32 +119,26 @@ final Provider<CampaignRepository> campaignRepositoryProvider =
   (Ref ref) => CampaignRepository(ref.watch(supabaseClientProvider)),
 );
 
-/// 案件一覧。
-final FutureProviderFamily<List<CampaignListItem>, CampaignListQuery>
+/// 案件一覧。絞り込み条件が同じならキャッシュが効く。
+final FutureProviderFamily<List<CampaignListItem>, CampaignFilter>
     campaignListProvider =
-    FutureProvider.family<List<CampaignListItem>, CampaignListQuery>(
-  (Ref ref, CampaignListQuery query) =>
-      ref.watch(campaignRepositoryProvider).listForCreator(
-            prefectureId: query.prefectureId,
-            genreId: query.genreId,
-            minReward: query.minReward,
-          ),
+    FutureProvider.family<List<CampaignListItem>, CampaignFilter>(
+  (Ref ref, CampaignFilter filter) =>
+      ref.watch(campaignRepositoryProvider).listForCreator(filter: filter),
 );
 
-class CampaignListQuery {
-  const CampaignListQuery({this.prefectureId, this.genreId, this.minReward});
+/// 案件一覧画面で選択中の絞り込み条件。
+final NotifierProvider<CampaignFilterNotifier, CampaignFilter>
+    campaignFilterProvider =
+    NotifierProvider<CampaignFilterNotifier, CampaignFilter>(
+  CampaignFilterNotifier.new,
+);
 
-  final int? prefectureId;
-  final int? genreId;
-  final int? minReward;
-
+class CampaignFilterNotifier extends Notifier<CampaignFilter> {
   @override
-  bool operator ==(Object other) =>
-      other is CampaignListQuery &&
-      other.prefectureId == prefectureId &&
-      other.genreId == genreId &&
-      other.minReward == minReward;
+  CampaignFilter build() => const CampaignFilter();
 
-  @override
-  int get hashCode => Object.hash(prefectureId, genreId, minReward);
+  void apply(CampaignFilter filter) => state = filter;
+
+  void clear() => state = const CampaignFilter();
 }

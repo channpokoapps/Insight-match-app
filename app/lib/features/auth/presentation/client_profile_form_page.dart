@@ -8,6 +8,7 @@ import '../../../core/address/postal_code_repository.dart';
 import '../../../core/error/app_failure.dart';
 import '../../../core/masters/master_repository.dart';
 import '../../../shared/widgets/genre_multi_select.dart';
+import '../../../shared/widgets/station_picker.dart';
 import '../../../shared/widgets/submit_button.dart';
 import '../data/profile_repository.dart';
 import '../domain/auth_validators.dart';
@@ -33,6 +34,7 @@ class _ClientProfileFormPageState extends ConsumerState<ClientProfileFormPage> {
   final Set<int> _genreIds = <int>{};
   int? _prefectureId;
   int? _cityId;
+  StationHit? _nearestStation;
   bool _submitting = false;
   bool _lookingUp = false;
   String? _postalNotice;
@@ -154,6 +156,7 @@ class _ClientProfileFormPageState extends ConsumerState<ClientProfileFormPage> {
             addressLine: _addressLine.text.trim().isEmpty
                 ? null
                 : _addressLine.text.trim(),
+            nearestStationId: _nearestStation?.id,
             contactEmail: contactEmail.isEmpty ? null : contactEmail,
             description: _description.text.trim().isEmpty
                 ? null
@@ -176,7 +179,7 @@ class _ClientProfileFormPageState extends ConsumerState<ClientProfileFormPage> {
     final AsyncValue<List<MasterItem>> genres = ref.watch(genresProvider);
     final AsyncValue<List<MasterItem>>? cities = _prefectureId == null
         ? null
-        : ref.watch(_citiesProvider(_prefectureId!));
+        : ref.watch(citiesProvider(_prefectureId!));
     return Scaffold(
       appBar: AppBar(title: const Text('店舗情報の登録（PR依頼者）')),
       body: SafeArea(
@@ -285,6 +288,35 @@ class _ClientProfileFormPageState extends ConsumerState<ClientProfileFormPage> {
                     ),
                   ),
                   const SizedBox(height: 12),
+                  // 投稿者は沿線・駅で案件を探すため、最寄り駅の登録が
+                  // そのまま検索でのヒットしやすさになる。
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.train_outlined),
+                    title: Text(_nearestStation?.name ?? '最寄り駅（任意）'),
+                    subtitle: Text(
+                      _nearestStation?.lineName ?? '投稿者が沿線から探せるようになります',
+                    ),
+                    trailing: _nearestStation == null
+                        ? const Icon(Icons.chevron_right)
+                        : IconButton(
+                            icon: const Icon(Icons.close),
+                            onPressed: _submitting
+                                ? null
+                                : () =>
+                                    setState(() => _nearestStation = null),
+                          ),
+                    onTap: _submitting
+                        ? null
+                        : () async {
+                            final StationHit? picked =
+                                await showStationPicker(context);
+                            if (picked != null && mounted) {
+                              setState(() => _nearestStation = picked);
+                            }
+                          },
+                  ),
+                  const SizedBox(height: 12),
                   TextField(
                     controller: _contactEmail,
                     keyboardType: TextInputType.emailAddress,
@@ -325,10 +357,3 @@ class _ClientProfileFormPageState extends ConsumerState<ClientProfileFormPage> {
     );
   }
 }
-
-/// 都道府県別の市区町村一覧。
-final FutureProviderFamily<List<MasterItem>, int> _citiesProvider =
-    FutureProvider.family<List<MasterItem>, int>(
-  (Ref ref, int prefectureId) =>
-      ref.watch(masterRepositoryProvider).fetchCities(prefectureId),
-);
