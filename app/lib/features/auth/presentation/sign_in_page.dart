@@ -10,6 +10,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../shared/widgets/error_notice.dart';
 import '../../../shared/widgets/submit_button.dart';
 import '../data/auth_repository.dart';
+import 'google_continue_button.dart';
 
 /// ログイン画面。
 ///
@@ -57,14 +58,11 @@ class _SignInPageState extends ConsumerState<SignInPage> {
             .signInWithPassword(_email.text, _password.text);
       });
 
-  Future<void> _signInWithGoogle() => _run(() async {
-        await ref.read(authRepositoryProvider).signInWithGoogle();
-      });
-
   @override
   Widget build(BuildContext context) {
-    // Google ログインからの復帰に失敗した場合、この画面に戻されるだけで
-    // 何のフィードバックも出ないため、コールバックの失敗もここで表示する。
+    // 確認メール・パスワード再設定メールのリンクからの復帰に失敗した場合、
+    // この画面に戻されるだけで何のフィードバックも出ないため、
+    // コールバックの失敗もここで表示する。
     final AppFailure? callbackFailure = ref.watch(authCallbackFailureProvider);
     final String? message = _error ?? callbackFailure?.message;
     final AuthCallbackTrace trace = ref.watch(authCallbackTraceProvider);
@@ -173,23 +171,32 @@ class _SignInPageState extends ConsumerState<SignInPage> {
                     ],
                   ),
                   const SizedBox(height: 16),
-                  OutlinedButton.icon(
-                    icon: const Icon(Icons.g_mobiledata, size: 28),
-                    label: const Text('Google で続行'),
-                    onPressed: _submitting ? null : _signInWithGoogle,
+                  // 初回利用時は自動的にアカウント作成になる。
+                  GoogleContinueButton(
+                    enabled: !_submitting,
+                    onBusyChanged: (bool busy) {
+                      if (mounted) {
+                        setState(() => _submitting = busy);
+                      }
+                    },
+                    onFailure: (String message) {
+                      if (mounted) {
+                        setState(() => _error = message);
+                      }
+                    },
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 16),
                   TextButton(
                     onPressed: _submitting
                         ? null
                         : () => context.push(AppRoutes.signUp),
-                    child: const Text('アカウントを新規作成'),
+                    child: const Text('はじめての方はアカウントを作成'),
                   ),
                   TextButton(
                     onPressed: _submitting
                         ? null
                         : () => context.push(AppRoutes.passwordReset),
-                    child: const Text('パスワードをお忘れの方'),
+                    child: const Text('パスワードを忘れた場合'),
                   ),
                   const SizedBox(height: 16),
                   // 「どのホストの、どのビルドを見ているか」を画面から判別できる

@@ -163,7 +163,7 @@ Claude への指示が曖昧だと、往復が増えて時間と利用枠を消�
 | --- | --- |
 | Issue を作ったのに Claude が動かない | 「依頼する」を選んだか確認。選び忘れたら Issue に `@claude 対応して` とコメントすれば起動する |
 | プレビュー URL が来ない | 変更がサーバー側だけの可能性（§3 参照）。PR のコメントの警告を読む。「Secrets 未設定」と出ていたら管理者に [manual_setup/github_automation.md](manual_setup/github_automation.md) を渡す |
-| プレビューでログインできない（Google でアカウントを選んでも進まない） | プレビュー URL のログイン許可登録が済んでいない。管理者向け手順: [manual_setup/github_automation.md](manual_setup/github_automation.md) §4（Supabase の Redirect URLs にプレビュー URL を登録する） |
+| プレビューでログインできない（Google でアカウントを選んでも進まない） | プレビュー URL のログイン許可登録が済んでいない。管理者向け手順: [manual_setup/github_automation.md](manual_setup/github_automation.md) §4（GCP の「承認済みの JavaScript 生成元」にプレビュー URL を登録する） |
 | APK の通知が来ない | `/apk` を **PR に**コメントしたか確認（Issue では動かない） |
 | マージしたのに本番が変わらない | 25 分待つ。`supabase/` の変更なら手動反映（§3）がまだの可能性。それでも変わらなければ Issue で `@claude main のデプロイが失敗してないか調べて` と依頼する |
 | 何をしても直らない | 新しい Issue に「〜を試したがこうなる」と経緯ごと書いて依頼し直す |

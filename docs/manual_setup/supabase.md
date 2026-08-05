@@ -62,17 +62,21 @@ supabase db push          # supabase/migrations/ を順に適用
 >
 > アプリは自分の起動オリジンに `/` を付けた URL（例:
 > `https://<firebase-project>.web.app/`）を `redirect_to` として渡す
-> （`auth_repository.dart` の `webRedirectUrl`。OAuth・確認メール・
+> （`auth_repository.dart` の `webRedirectUrl`。確認メールと
 > パスワード再設定メールで共通）。
 > それが Redirect URLs に**一致しない**場合、Supabase はエラーを返さず
 > **Site URL へフォールバック**して戻す。
 >
-> このとき、PKCE の `code_verifier` は**ログインを開始したオリジンの
+> このとき、PKCE の `code_verifier` は**リンクを要求したオリジンの
 > localStorage** にしかない。別オリジン（Site URL 側）で受け取った `?code=` は
 > 交換できずに失敗し、セッションが張られないままログイン画面に戻る。
 >
-> 症状は「Google で続行 → アカウントを選択 → 何も起きない／登録画面に進まない」。
-> **プレビュー URL で Google ログインが完了しないときは、まずここを疑う。**
+> 症状は「メールのリンクを開いたのに何も起きない／登録画面に進まない」。
+> **プレビュー URL でメールリンクが完了しないときは、まずここを疑う。**
+>
+> **Google ログインはこの経路を使わない**（§4.2）。Google は Web でも
+> ページを離れず ID トークンを直接受け取る方式に変えたため、Redirect URLs も
+> PKCE も関与しない。
 3. 本番公開前に **SMTP（独自ドメインのメール）** を設定する。既定の送信元はレート制限が厳しい。
    送信者名（From name）は **`SNS Insight Matcher`** にする。差出人がサービス名で表示されないと、
    確認メールがフィッシングと区別できず開かれない。
@@ -99,12 +103,31 @@ Supabase **Authentication → Emails → Templates** で、以下の 3 つを差
 
 ### 4.2 Google サインイン
 
+> **前提: アプリは Web も Android も「ID トークン方式」で統一している。**
+> Web も Google Identity Services（GIS）のボタンでページを離れずに
+> ID トークンを受け取り、`signInWithIdToken` に渡す
+> （`auth_repository.dart` / `google_continue_button.dart`）。
+> **Supabase の Redirect URLs も PKCE も使わない**ので、下の GCP 設定さえ
+> 合っていればプレビュー・本番のどちらでも同じように動く。
+
 GCP コンソール（**Firebase プロジェクトと同じ GCP プロジェクトでよい**）→ APIs & Services → Credentials:
 
 1. **OAuth 同意画面**を構成する（External / アプリ名 / サポートメール）。
 2. OAuth クライアントを **2 つ**作成する。
-   - **ウェブ アプリケーション**: 承認済みリダイレクト URI に
-     `https://<project-ref>.supabase.co/auth/v1/callback` を追加。
+   - **ウェブ アプリケーション**:
+     - **承認済みの JavaScript 生成元**（**Web ログインに必須**）に、
+       アプリを配信するオリジンを**パスなし**で登録する。
+       ここが未登録だと GIS がボタンを描画できず、押しても認証が始まらない。
+       ワイルドカードは使えないため実 URL を 1 つずつ登録する。
+       - `https://<firebase-project>.web.app`
+       - `https://<firebase-project>--preview-xxxxxxxx.web.app`
+         （プレビューチャンネル。URL は固定なので一度登録すればよい。
+         [github_automation.md](github_automation.md) §4）
+       - `http://localhost:<ポート>`（ローカル開発で使う場合）
+     - 承認済みリダイレクト URI に
+       `https://<project-ref>.supabase.co/auth/v1/callback` を追加。
+       （現在のアプリは使わないが、ダッシュボードから
+       Google プロバイダの疎通確認をする場合に必要）
    - **Android**: パッケージ名 `app.insightmatch.android` と **SHA-1**（下記コマンドで取得）を登録。
 
      ```bash
@@ -112,36 +135,34 @@ GCP コンソール（**Firebase プロジェクトと同じ GCP プロジェク
      ```
 
      Play 公開後は **Play Console → アプリの署名** に表示される SHA-1 も追加登録する。
-3. Supabase **Authentication → Providers → Google**:
+3. **ウェブ**クライアントの Client ID を、ビルドに `GOOGLE_WEB_CLIENT_ID` として
+   注入する（`env/prod.json` → GitHub Secrets `FLUTTER_ENV_PROD`）。
+   **未注入だと Web / Android とも Google ボタンが無効になり、画面に
+   「Google ログインは現在設定中です」と表示される。**
+4. Supabase **Authentication → Providers → Google**:
    - Enabled: ON
    - Client ID / Client Secret: **ウェブ**クライアントの値
    - **Authorized Client IDs**: ウェブクライアントの Client ID を追加
-     （Android は `signInWithIdToken` で検証されるため、ここにウェブ Client ID が必要）。
+     （**Web / Android とも `signInWithIdToken` で検証されるため必須**）。
 
-### 4.3 トラブルシューティング: `Unable to exchange external code`
+### 4.3 トラブルシューティング: Google でログインできない
 
-Google でアカウントを選択したあと
-`?error=server_error&error_description=Unable+to+exchange+external+code`
-付きの URL で戻される場合、Supabase が Google との認可コード交換に失敗している。
-原因はほぼ確実に **Google プロバイダ設定の不整合**なので、上から順に確認する。
+「Google で続行 → アカウントを選択 → ログインできない」ときは、
+症状ごとに見る場所が違う。
 
-1. **Client Secret を貼り直す**（本命）。Authentication → Providers → Google の
-   Client Secret に、GCP の**ウェブ**クライアントの現在のシークレットを貼り直す。
-   前後の空白・改行の混入や、GCP 側でシークレットをローテーションして
-   失効した古い値が残っているケースが典型。
-2. **Client ID とシークレットの対応**を確認する。Client ID がそのシークレットの
-   属するウェブクライアントと一致していること（別クライアントの ID + 別クライアントの
-   シークレットの組み合わせは交換に失敗する）。
-3. **GCP 側の承認済みリダイレクト URI** が
-   `https://<project-ref>.supabase.co/auth/v1/callback` と**完全一致**していること
-   （§4.2 の 2. 参照。末尾スラッシュの有無やプロジェクト ref の相違に注意）。
-4. **Authorized Client IDs** にウェブクライアントの Client ID が入っていること
-   （§4.2 の 3. 参照。こちらは Android の `signInWithIdToken` 側の検証に必要）。
+| 症状 | 見るところ |
+|---|---|
+| ボタンが「Getting ready」のまま／描画されない | §4.2 の **承認済みの JavaScript 生成元**。ブラウザのコンソールに GIS の生成元エラーが出る |
+| ボタンは出るが押しても何も起きない | 同上（生成元未登録）。または `GOOGLE_WEB_CLIENT_ID` の値違い |
+| 「Google ログインは現在設定中です」と出る | `GOOGLE_WEB_CLIENT_ID` がビルドに注入されていない（§4.2 の 3.） |
+| アカウント選択後に「Google ログインに失敗しました」と出る | Supabase → Providers → Google の **Authorized Client IDs** にウェブクライアントの Client ID が入っていない（§4.2 の 4.）。ID トークンの `aud` 検証で弾かれている |
+| Android だけ失敗する | GCP の **Android クライアント**の SHA-1 未登録。`serverClientId` に Android クライアント ID を渡していないことも確認する |
 
-なお「アカウントを選択したのに**エラー表示も無く**ログイン画面に戻る」場合は
-本節ではなく §4.1 の Redirect URLs 登録漏れ（無言フォールバック）を疑うこと。
 どのオリジン・どのビルドで起きたかは、ログイン画面下部の灰色の診断行
 （起動 URL のトレースとビルド識別子）で確認できる。
+
+> **メールのリンク**（確認メール・パスワード再設定）が完了しない場合は
+> 本節ではなく §4.1 の Redirect URLs 登録漏れ（無言フォールバック）を疑うこと。
 
 ## 5. Edge Functions（Phase 3 以降）
 

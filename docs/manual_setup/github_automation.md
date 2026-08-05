@@ -118,7 +118,19 @@ gh secret set FLUTTER_WEB_FIREBASE_CONFIG -R channpokoapps/Insight-match-app < e
 
 1. Secrets 登録後、適当な PR を作る（または既存 PR に push する）と
    プレビューがデプロイされ、PR のコメントに URL が出る。その URL を控える。
-2. **Supabase**: [ダッシュボード](https://supabase.com/dashboard) →
+2. **Google ログイン**（**必須**）: [GCP コンソール → 認証情報](https://console.cloud.google.com/apis/credentials) →
+   ウェブアプリケーションの OAuth クライアント → **承認済みの JavaScript 生成元**に
+   プレビューの URL を**パスなし**で追加する。
+
+   ```
+   https://insight-match-2fbaa--preview-<ランダム>.web.app
+   ```
+
+   Web の Google ログインは Google Identity Services（GIS）がその場で
+   ID トークンを返す方式なので、**見るのはここだけ**（Supabase の
+   Redirect URLs は関与しない）。**ワイルドカードは使えない**ため実 URL を
+   登録する。チャンネル URL は固定なので一度登録すれば足りる。
+3. **Supabase**: [ダッシュボード](https://supabase.com/dashboard) →
    プロジェクト → Authentication → **URL Configuration → Redirect URLs** に
    **ワイルドカードで**追加する。
 
@@ -126,23 +138,19 @@ gh secret set FLUTTER_WEB_FIREBASE_CONFIG -R channpokoapps/Insight-match-app < e
    https://insight-match-2fbaa--*.web.app/**
    ```
 
+   こちらは**確認メール・パスワード再設定メールのリンク**用。
    Redirect URLs はホスト名部分にも `*` を使えるため、こう登録しておけば
    チャンネルのランダム部分が変わっても登録し直さなくてよい。
-   実 URL（`https://insight-match-2fbaa--preview-<ランダム>.web.app/**`）を
-   個別に足しても動くが、失効のたびに再登録が必要になる。
-3. **Google ログイン**: [GCP コンソール → 認証情報](https://console.cloud.google.com/apis/credentials) →
-   ウェブアプリケーションの OAuth クライアント → **承認済みの JavaScript 生成元**に
-   プレビューの URL（パスなし）を追加する（ワイルドカード不可のため実 URL を登録）。
-   ※ 現在の実装（`signInWithOAuth` によるリダイレクト方式）では Google 側は
-   Supabase の callback URL しか見ないため必須ではないが、将来 Google の
-   JS SDK を使う場合に備えて登録しておく。
 
-> **この登録を飛ばすと、ログインは「無言で失敗」する。**
+> **手順 2 を飛ばすと、プレビューで Google ボタンが動かない。**
+> GIS は「承認済みの JavaScript 生成元」に無いオリジンではボタンを描画せず、
+> 押しても認証が始まらない（ブラウザのコンソールに生成元エラーが出る）。
+>
+> **手順 3 を飛ばすと、メールのリンクが「無言で失敗」する。**
 > `redirect_to` が Redirect URLs に一致しないと、Supabase はエラーを返さず
 > **Site URL（本番 URL）へフォールバック**して戻す。PKCE の `code_verifier` は
-> ログインを開始したオリジンの localStorage にしかないので、別オリジンで
-> 受け取った `?code=` は交換に失敗し、セッションが張られないままログイン画面に戻る。
-> 症状は「**Google で続行 → アカウントを選択 → 何も起きない／登録画面に進まない**」。
+> リンクを要求したオリジンの localStorage にしかないので、別オリジンで
+> 受け取った `?code=` は交換に失敗し、セッションが張られないまま画面に戻る。
 
 > **プレビューチャンネルは 30 日間デプロイが無いと失効し、URL のランダム部分が
 > 変わる**。手順 2 をワイルドカードで登録していれば影響を受けない。

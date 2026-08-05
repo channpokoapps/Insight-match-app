@@ -47,8 +47,11 @@ Firebase は次の 3 つだけに使う。バックエンドは Supabase（[supa
    firebase deploy --only hosting
    ```
 
-5. 公開 URL（`https://<project-id>.web.app`）を Supabase の
-   **Auth → URL Configuration**（Site URL / Redirect URLs）に登録する（[supabase.md](supabase.md) §4.1）。
+5. 公開 URL（`https://<project-id>.web.app`）を 2 か所に登録する。
+   - Supabase の **Auth → URL Configuration**（Site URL / Redirect URLs）。
+     確認メール・パスワード再設定メールのリンク用（[supabase.md](supabase.md) §4.1）。
+   - GCP のウェブ OAuth クライアントの **承認済みの JavaScript 生成元**。
+     **Web の Google ログインに必須**（[supabase.md](supabase.md) §4.2）。
 
 ## 3. Android アプリ登録
 

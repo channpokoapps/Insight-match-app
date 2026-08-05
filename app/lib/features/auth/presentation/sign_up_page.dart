@@ -7,6 +7,7 @@ import '../../../shared/widgets/error_notice.dart';
 import '../../../shared/widgets/submit_button.dart';
 import '../data/auth_repository.dart';
 import '../domain/auth_validators.dart';
+import 'google_continue_button.dart';
 
 /// アカウント新規作成画面。
 ///
@@ -185,6 +186,39 @@ class _SignUpPageState extends ConsumerState<SignUpPage> {
           label: '登録する',
           submitting: _submitting,
           onPressed: _signUp,
+        ),
+        const SizedBox(height: 16),
+        Row(
+          children: <Widget>[
+            const Expanded(child: Divider()),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Text(
+                'または',
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall
+                    ?.copyWith(color: Colors.grey.shade500),
+              ),
+            ),
+            const Expanded(child: Divider()),
+          ],
+        ),
+        const SizedBox(height: 16),
+        // Google は初回利用が自動的にアカウント作成になるため、
+        // ログイン画面と同じボタンをそのまま置く（確認メールは不要）。
+        GoogleContinueButton(
+          enabled: !_submitting,
+          onBusyChanged: (bool busy) {
+            if (mounted) {
+              setState(() => _submitting = busy);
+            }
+          },
+          onFailure: (String message) {
+            if (mounted) {
+              setState(() => _error = message);
+            }
+          },
         ),
       ],
     );
