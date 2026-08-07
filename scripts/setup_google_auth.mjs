@@ -25,6 +25,8 @@
 import { createSign } from 'node:crypto';
 
 const APPLY = process.env.APPLY === 'true';
+/** 未解決があるときに終了コード 1 で落とすか。確認だけの自動実行では false。 */
+const FAIL_ON_UNRESOLVED = process.env.FAIL_ON_UNRESOLVED !== 'false';
 const PREVIEW_DOMAIN = (process.env.PREVIEW_DOMAIN ?? '').trim();
 
 /** 実行結果の行。最後にまとめて表示する。 */
@@ -199,33 +201,34 @@ async function ensureGoogleProvider(token, projectId, clientId, clientSecret) {
     return;
   }
 
-  if (!clientSecret) {
-    unresolved += 1;
-    log(
-      'Google プロバイダ',
-      'NG',
-      `${detail}。有効化には GOOGLE_WEB_CLIENT_SECRET（ウェブ クライアントのシークレット）が必要です`,
-    );
-    return;
-  }
+  // シークレットが無くても、まずは ID だけで試す。Google プロバイダは
+  // シークレット無しで通ることがあり、事前に諦めると余計な設定作業を
+  // 要求してしまう。必要だった場合は API がその旨を返すので、それを見せる。
+  const payload = clientSecret
+    ? { enabled: true, clientId, clientSecret }
+    : { enabled: true, clientId };
+  const fields = clientSecret ? 'enabled,clientId,clientSecret' : 'enabled,clientId';
 
   // 既存があれば更新、無ければ作成。作成は idpId をクエリで渡す。
   const result = exists
-    ? await callIdentityToolkit(token, `${path}?updateMask=enabled,clientId,clientSecret`, {
+    ? await callIdentityToolkit(token, `${path}?updateMask=${fields}`, {
         method: 'PATCH',
-        body: { enabled: true, clientId, clientSecret },
+        body: payload,
       })
     : await callIdentityToolkit(
         token,
         `projects/${projectId}/defaultSupportedIdpConfigs?idpId=google.com`,
-        { method: 'POST', body: { enabled: true, clientId, clientSecret } },
+        { method: 'POST', body: payload },
       );
 
   if (!result.ok) {
     unresolved += 1;
+    const apiMessage = result.body?.error?.message ?? `HTTP ${result.status}`;
     const reason = isPermissionDenied(result)
       ? permissionHint(projectId)
-      : result.body?.error?.message ?? `HTTP ${result.status}`;
+      : clientSecret
+        ? apiMessage
+        : `${apiMessage}（GOOGLE_WEB_CLIENT_SECRET を登録すると解決する可能性があります）`;
     log('Google プロバイダ', 'NG', reason);
     return;
   }
@@ -398,7 +401,10 @@ async function main() {
 
   if (unresolved > 0) {
     console.error(`\n未解決: ${unresolved} 件`);
-    process.exit(1);
+    if (FAIL_ON_UNRESOLVED) {
+      process.exit(1);
+    }
+    return;
   }
   console.log('\nすべて設定済みです。');
 }

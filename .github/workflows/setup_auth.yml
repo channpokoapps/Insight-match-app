@@ -18,6 +18,14 @@ on:
         description: '承認済みドメインに追加するホスト名（例: insight-match-2fbaa--preview-xxxxxxxx.web.app）。空なら追加しない'
         type: string
         default: ''
+  # このワークフロー自身を変更したときだけ、確認のみで自動実行する。
+  # 設定の現状（プロバイダの有効・無効、権限の有無）を人手を介さず把握するため。
+  # push では絶対に適用しない（下の APPLY を参照）。
+  push:
+    branches: ['claude/**']
+    paths:
+      - 'scripts/setup_google_auth.mjs'
+      - '.github/workflows/setup_auth.yml'
 
 jobs:
   google-signin:
@@ -44,7 +52,10 @@ jobs:
       # 適用にはウェブ クライアントのシークレットが要る。確認のみなら不要。
       - name: 設定を適用・確認
         env:
-          APPLY: ${{ inputs.apply }}
+          # 適用は手動実行のときだけ。push で走る場合は必ず確認のみ。
+          APPLY: ${{ github.event_name == 'workflow_dispatch' && inputs.apply || false }}
+          # 確認だけの自動実行で赤くしても意味がないので、失敗扱いは手動実行時のみ。
+          FAIL_ON_UNRESOLVED: ${{ github.event_name == 'workflow_dispatch' }}
           PREVIEW_DOMAIN: ${{ inputs.preview_domain }}
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           FLUTTER_ENV_PROD: ${{ secrets.FLUTTER_ENV_PROD }}
