@@ -10,6 +10,13 @@ name: Supabase マイグレーション反映
 #   未適用のまま `app/` だけ新しくなると、案件作成画面が
 #   「店舗情報を取得できませんでした。」で開けなくなる（client_profiles.genre_ids が無いため）。
 #
+# 接続方法:
+#   `supabase link` は使わない。link は Management API の api-keys 応答を
+#   スキーマ検証しており、応答側の日時形式が合わずに
+#   「failed to get api keys: SchemaError(...inserted_at)」で落ちるため
+#   （DB とは無関係の失敗で、こちらから直せない）。代わりに接続文字列を
+#   組み立てて `--db-url` で直接つなぐ。
+#
 # 安全側の設計:
 #   - 既定は **確認のみ**。何も変更せず、適用済み／未適用の一覧を出すだけ。
 #   - 適用は apply=true を選んだ手動実行のときだけ。push では絶対に走らせない。
@@ -28,8 +35,6 @@ on:
         type: boolean
         default: false
   # このワークフロー自身を変更したときだけ、確認のみで自動実行する。
-  # workflow_dispatch は main にファイルが無いと選べないため、マージ前に
-  # 設定（Secrets / Variable）と接続を確かめる手段がなくなるのを避ける。
   # push では絶対に適用しない（下の APPLY を参照）。
   push:
     branches: ['claude/**']
@@ -51,6 +56,9 @@ jobs:
     env:
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
       SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      # 接続文字列を直接指定したいとき用の逃げ道（ダッシュボードの
+      # Connect → Session pooler の URI）。設定されていればこちらを優先する。
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
       PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
       # 適用は手動実行で apply を選んだときだけ。push では必ず確認のみ。
       APPLY: ${{ github.event_name == 'workflow_dispatch' && inputs.apply || false }}
@@ -66,8 +74,13 @@ jobs:
         env:
           HAS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN != '' }}
           HAS_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD != '' }}
+          HAS_DB_URL: ${{ secrets.SUPABASE_DB_URL != '' }}
         run: |
           set -euo pipefail
+          if [ "$HAS_DB_URL" = "true" ]; then
+            echo "SUPABASE_DB_URL を使って接続します。"
+            exit 0
+          fi
           missing=""
           [ "$HAS_TOKEN" = "true" ]    || missing="${missing} SUPABASE_ACCESS_TOKEN(secret)"
           [ "$HAS_PASSWORD" = "true" ] || missing="${missing} SUPABASE_DB_PASSWORD(secret)"
@@ -77,16 +90,95 @@ jobs:
             exit 1
           fi
 
-      - name: プロジェクトへ link
-        run: supabase link --project-ref "${PROJECT_REF}"
+      # Pooler の接続先は Management API から引く。GitHub の runner は IPv4 のみで、
+      # 直結ホスト（db.<ref>.supabase.co）は IPv6 専用のことがあるため。
+      # マイグレーションは session mode（5432）で流す。transaction mode（6543）は
+      # トランザクション境界をまたぐ処理に向かない。
+      - name: 接続先を組み立てる
+        run: |
+          set -euo pipefail
+          if [ -n "${SUPABASE_DB_URL}" ]; then
+            echo "::add-mask::${SUPABASE_DB_URL}"
+            echo "DB_URL=${SUPABASE_DB_URL}" >> "$GITHUB_ENV"
+            echo "接続先: SUPABASE_DB_URL（内容は伏せます）"
+            exit 0
+          fi
+          python3 - <<'PY' > /tmp/db_url
+          import json, os, socket, sys, urllib.parse, urllib.request
+
+          ref = os.environ['PROJECT_REF']
+          token = os.environ['SUPABASE_ACCESS_TOKEN']
+          password = os.environ['SUPABASE_DB_PASSWORD']
+
+          def api(path):
+              req = urllib.request.Request(
+                  'https://api.supabase.com/v1' + path,
+                  headers={
+                      'Authorization': 'Bearer ' + token,
+                      'Accept': 'application/json',
+                      # 既定の Python-urllib は手前で 403 に弾かれるため明示する。
+                      'User-Agent': 'insight-match-ci',
+                  },
+              )
+              with urllib.request.urlopen(req, timeout=30) as res:
+                  return json.load(res)
+
+          def reachable(host):
+              """IPv4 で引けるか。runner は IPv4 のみで、直結ホストは IPv6 専用のことがある。"""
+              try:
+                  return bool(socket.getaddrinfo(host, 5432, socket.AF_INET))
+              except OSError:
+                  return False
+
+          candidates = []
+          try:
+              cfg = api(f'/projects/{ref}/config/database/pooler')
+              for entry in (cfg if isinstance(cfg, list) else [cfg]):
+                  if entry.get('db_host'):
+                      candidates.append(
+                          (entry['db_host'], entry.get('db_user') or f'postgres.{ref}'))
+          except Exception as e:
+              print(f'pooler 設定の取得に失敗: {e}', file=sys.stderr)
+
+          if not candidates:
+              # リージョンから pooler のホスト名を組み立てる。世代で接頭辞が違う。
+              try:
+                  for p in api('/projects'):
+                      if p.get('id') == ref and p.get('region'):
+                          for n in (0, 1, 2):
+                              candidates.append((
+                                  f'aws-{n}-{p["region"]}.pooler.supabase.com',
+                                  f'postgres.{ref}',
+                              ))
+                          break
+              except Exception as e:
+                  print(f'プロジェクト一覧の取得に失敗: {e}', file=sys.stderr)
+
+          candidates.append((f'db.{ref}.supabase.co', 'postgres'))
+
+          for host, user in candidates:
+              if reachable(host):
+                  print(f'接続先ホスト: {host}', file=sys.stderr)
+                  quoted = urllib.parse.quote(password, safe='')
+                  print(f'postgresql://{user}:{quoted}@{host}:5432/postgres')
+                  break
+          else:
+              print('IPv4 で到達できる接続先が見つかりませんでした。'
+                    'ダッシュボードの Connect → Session pooler の URI を'
+                    ' Secret SUPABASE_DB_URL に登録してください。', file=sys.stderr)
+              sys.exit(1)
+          PY
+          url="$(cat /tmp/db_url)"
+          rm -f /tmp/db_url
+          echo "::add-mask::${url}"
+          echo "DB_URL=${url}" >> "$GITHUB_ENV"
 
       # Local = リポジトリの supabase/migrations、Remote = 本番 DB に適用済みの版。
       # Remote が空欄の行が「未適用」。ここが案件作成の不具合の切り分けに直結する。
       - name: 適用状況の一覧（変更なし）
-        id: before
         run: |
           set -euo pipefail
-          supabase migration list --linked | tee migration_list.txt
+          supabase migration list --db-url "$DB_URL" | tee migration_list.txt
           {
             echo '## 適用状況（実行前）'
             echo ''
@@ -101,16 +193,16 @@ jobs:
           set -euo pipefail
           # 端末ではないため CLI は確認プロンプトを出さずに進む。
           if [ "${INCLUDE_ALL}" = "true" ]; then
-            supabase db push --linked --include-all
+            supabase db push --db-url "$DB_URL" --include-all
           else
-            supabase db push --linked
+            supabase db push --db-url "$DB_URL"
           fi
 
       - name: 適用後の一覧
         if: ${{ env.APPLY == 'true' }}
         run: |
           set -euo pipefail
-          supabase migration list --linked | tee migration_list_after.txt
+          supabase migration list --db-url "$DB_URL" | tee migration_list_after.txt
           {
             echo '## 適用状況（実行後）'
             echo ''
@@ -129,5 +221,7 @@ jobs:
               echo '- Remote 欄が空のマイグレーションが未適用。適用するには apply にチェックを入れて再実行する。'
             fi
             echo '- Edge Functions は別途 `supabase functions deploy` が必要（このワークフローの対象外）。'
+            echo '- 接続で落ちる場合は、ダッシュボードの Connect → Session pooler の URI を'
+            echo '  Secret `SUPABASE_DB_URL` に登録すると、そちらを優先して使う。'
             echo '- 手作業で SQL を流したなどで履歴がずれている場合は `supabase migration repair` が要る。エラー本文を Issue に貼って相談すること。'
           } >> "$GITHUB_STEP_SUMMARY"
