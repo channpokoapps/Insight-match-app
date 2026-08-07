@@ -118,18 +118,19 @@ gh secret set FLUTTER_WEB_FIREBASE_CONFIG -R channpokoapps/Insight-match-app < e
 
 1. Secrets 登録後、適当な PR を作る（または既存 PR に push する）と
    プレビューがデプロイされ、PR のコメントに URL が出る。その URL を控える。
-2. **Google ログイン**（**必須**）: [GCP コンソール → 認証情報](https://console.cloud.google.com/apis/credentials) →
-   ウェブアプリケーションの OAuth クライアント → **承認済みの JavaScript 生成元**に
-   プレビューの URL を**パスなし**で追加する。
+2. **Google ログイン**（**必須**）: [Firebase コンソール](https://console.firebase.google.com) →
+   Authentication → **Settings → 承認済みドメイン**に、プレビューの
+   ホスト名を**スキームなし・パスなし**で追加する。
 
    ```
-   https://insight-match-2fbaa--preview-<ランダム>.web.app
+   insight-match-2fbaa--preview-<ランダム>.web.app
    ```
 
-   Web の Google ログインは Google Identity Services（GIS）がその場で
-   ID トークンを返す方式なので、**見るのはここだけ**（Supabase の
-   Redirect URLs は関与しない）。**ワイルドカードは使えない**ため実 URL を
-   登録する。チャンネル URL は固定なので一度登録すれば足りる。
+   Web の Google ログインは Firebase のポップアップで完結する方式なので、
+   生成元の検査は**ここだけ**が担当する（Supabase の Redirect URLs も
+   GCP の「承認済みの JavaScript 生成元」も関与しない）。
+   **ワイルドカードは使えない**ため実ホストを登録する。
+   チャンネル URL は固定なので一度登録すれば足りる。
 3. **Supabase**: [ダッシュボード](https://supabase.com/dashboard) →
    プロジェクト → Authentication → **URL Configuration → Redirect URLs** に
    **ワイルドカードで**追加する。
@@ -142,9 +143,9 @@ gh secret set FLUTTER_WEB_FIREBASE_CONFIG -R channpokoapps/Insight-match-app < e
    Redirect URLs はホスト名部分にも `*` を使えるため、こう登録しておけば
    チャンネルのランダム部分が変わっても登録し直さなくてよい。
 
-> **手順 2 を飛ばすと、プレビューで Google ボタンが動かない。**
-> GIS は「承認済みの JavaScript 生成元」に無いオリジンではボタンを描画せず、
-> 押しても認証が始まらない（ブラウザのコンソールに生成元エラーが出る）。
+> **手順 2 を飛ばすと、プレビューで Google ログインができない。**
+> 承認済みドメインに無いホストからのポップアップは Firebase が拒否し、
+> 画面に「この URL からは Google ログインを利用できません」と表示される。
 >
 > **手順 3 を飛ばすと、メールのリンクが「無言で失敗」する。**
 > `redirect_to` が Redirect URLs に一致しないと、Supabase はエラーを返さず

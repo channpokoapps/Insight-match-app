@@ -3,14 +3,24 @@
 /// メールアドレス + パスワード、または Google アカウントで登録・ログインする。
 /// Instagram はログイン手段として使わない（OI-26 決定済み）。
 ///
-/// Google は Web / Android とも **ID トークン方式**に統一している。
+/// Google は Web / Android とも **ID トークン方式**に統一している
+/// （Shift Navi と同じ仕組み）。
 /// Web でも `signInWithOAuth`（ページ遷移するリダイレクト方式）は使わない。
 /// リダイレクト方式は「Supabase の Redirect URLs に起動オリジンが登録済み」
 /// かつ「PKCE の code_verifier が戻り先と同じオリジンの localStorage にある」
 /// という遠隔設定に依存し、外れると **エラーも出さずにログイン画面へ戻る**。
-/// GIS はページを離れずその場で ID トークンを返すため、この依存が消える。
+///
+/// Web はポップアップで Google の ID トークンをその場で受け取り、Android は
+/// google_sign_in から受け取る。どちらもページを離れないので上の依存が消える。
+///
+/// **Firebase Authentication は「Google の ID トークンを取り出す窓口」としてのみ
+/// 使う。** アプリの利用者 ID・権限はこれまで通り Supabase Auth（`auth.uid()`）
+/// が唯一の正であり、Firebase 側のセッションはトークンを取り出したら破棄する。
 library;
 
+// Supabase の gotrue とクラス名（OAuthProvider など）が衝突するため前置詞をつける。
+import 'package:firebase_auth/firebase_auth.dart' as fb;
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -29,18 +39,18 @@ class AuthRepository {
   ///
   /// [client] Supabase クライアント。
   /// [googleSignIn] テスト用の google_sign_in 差し替え。省略時は共有インスタンス。
-  AuthRepository(this._client, {GoogleSignIn? googleSignIn})
-      : _googleSignIn = googleSignIn ?? GoogleSignIn.instance;
+  /// [firebaseAuth] テスト用の Firebase Auth 差し替え。省略時は既定のインスタンス
+  /// （Web の Google ポップアップでのみ使う。未初期化なら参照しない）。
+  AuthRepository(
+    this._client, {
+    GoogleSignIn? googleSignIn,
+    fb.FirebaseAuth? firebaseAuth,
+  })  : _googleSignIn = googleSignIn ?? GoogleSignIn.instance,
+        _firebaseAuth = firebaseAuth;
 
   final SupabaseClient _client;
   final GoogleSignIn _googleSignIn;
-
-  /// google_sign_in の初期化。プロセス内で 1 回だけ走らせる。
-  ///
-  /// v7 系の `initialize()` は 2 回目の呼び出しで StateError を投げるため、
-  /// 完了フラグではなく Future 自体を共有し、同時に押されても 1 回に畳む。
-  /// 失敗したときは null に戻して再試行できるようにする。
-  static Future<void>? _googleInitialization;
+  final fb.FirebaseAuth? _firebaseAuth;
 
   /// OAuth・メールリンクの戻り先 URL。http(s) で起動していない場合は null。
   ///
@@ -167,101 +177,35 @@ class AuthRepository {
     }
   }
 
-  /// Google サインインを使える状態にする。
+  /// Google アカウントでログインする（初回は自動的にアカウント作成になる）。
   ///
-  /// Web はここで GIS（Google Identity Services）のクライアント ID を渡す。
-  /// これが済むまで GIS のボタンは描画できないため、ボタン側が表示前に呼ぶ。
+  /// Web は Firebase Authentication のポップアップで Google の ID トークンを
+  /// その場で受け取り、Android は google_sign_in から受け取る。どちらも
+  /// 受け取った ID トークンを `signInWithIdToken` で Supabase に渡す。
+  ///
+  /// 戻り値はログインが完了したら true、利用者がダイアログを閉じたら false。
   ///
   /// 例外:
-  /// - [AppFailure] ビルド設定に「ウェブ」クライアント ID が無い場合。
-  Future<void> ensureGoogleSignInReady() =>
-      _googleInitialization ??= _initializeGoogleSignIn();
-
-  Future<void> _initializeGoogleSignIn() async {
+  /// - [AppFailure] 認証に失敗した場合。
+  Future<bool> signInWithGoogle() async {
     try {
-      if (Env.googleWebClientId.isEmpty) {
-        // 未注入のまま initialize() すると、Web は assert で落ち、Android は
-        // idToken が null で返るだけで「なぜかログインできない」失敗になる。
-        // ビルド設定の不備だと分かる形でここで止める。
-        throw const AppFailure(
-          FailureKind.unknown,
-          'Google ログインは現在設定中です。メールアドレスでご登録ください。',
-        );
+      final String? idToken =
+          kIsWeb ? await _idTokenFromPopup() : await _idTokenFromDevice();
+      if (idToken == null) {
+        // 利用者がダイアログを閉じただけ。エラーではない。
+        return false;
       }
-      // GCP の「ウェブ」クライアント ID を、Web は GIS の clientId として、
-      // Android は ID トークンの発行先（serverClientId）として使う。
-      // Android クライアント ID ではないことに注意（supabase.md §4.2）。
-      // Web 実装は serverClientId を受け付けない（assert で落ちる）。
-      await _googleSignIn.initialize(
-        clientId: kIsWeb ? Env.googleWebClientId : null,
-        serverClientId: kIsWeb ? null : Env.googleWebClientId,
-      );
-    } on Object catch (e, s) {
-      // 失敗した Future を握ったままだと以後ずっと初期化済み扱いになる。
-      _googleInitialization = null;
-      if (e is! AppFailure) {
-        AppLogger.error('auth.google_init_failed', AppFailure.from(e).code, s);
-      }
-      rethrow;
-    }
-  }
-
-  /// Google サインインの結果が流れるストリーム。
-  ///
-  /// Web の GIS ボタンも Android の [startGoogleSignIn] も、成功すると
-  /// ここに [GoogleSignInAuthenticationEventSignIn] が流れる。失敗は
-  /// [GoogleSignInException] のストリームエラーとして届く。
-  Stream<GoogleSignInAuthenticationEvent> get googleAuthenticationEvents =>
-      _googleSignIn.authenticationEvents;
-
-  /// 端末の Google アカウント選択を開始する（Web 以外）。
-  ///
-  /// Web では使えない。GIS は自分が描画したボタン経由でしか認証を開始できず、
-  /// `authenticate()` は UnimplementedError を投げる。
-  /// 結果は [googleAuthenticationEvents] に流れる。
-  Future<void> startGoogleSignIn() async {
-    await ensureGoogleSignInReady();
-    await _googleSignIn.authenticate();
-  }
-
-  /// 進行中の ID トークン交換。二重実行を防ぐために共有する。
-  ///
-  /// GIS のサインイン結果は購読している全リスナーに届く。ログイン画面の上に
-  /// 新規登録画面が積まれていると両方のボタンが受け取るため、素直に交換すると
-  /// 2 本目が失敗し、遷移済みの画面にエラーだけが残る。
-  static Future<void>? _pendingGoogleExchange;
-
-  /// Google から受け取った ID トークンで Supabase のセッションを張る。
-  ///
-  /// Web もこの経路を使う。ページを離れないため、リダイレクト方式のように
-  /// 戻り先オリジンの登録漏れで無言に失敗することがない。
-  Future<void> signInWithGoogleAccount(GoogleSignInAccount account) {
-    return _pendingGoogleExchange ??= _exchangeGoogleIdToken(account);
-  }
-
-  Future<void> _exchangeGoogleIdToken(GoogleSignInAccount account) async {
-    try {
-      await _signInWithGoogleIdToken(account);
-    } finally {
-      _pendingGoogleExchange = null;
-    }
-  }
-
-  Future<void> _signInWithGoogleIdToken(GoogleSignInAccount account) async {
-    final String? idToken = account.authentication.idToken;
-    if (idToken == null) {
-      AppLogger.error('auth.google_failed', 'no_id_token', StackTrace.current);
-      throw const AppFailure(
-        FailureKind.unknown,
-        'Google ログインに失敗しました。時間をおいて再度お試しください。',
-      );
-    }
-    try {
       await _client.auth.signInWithIdToken(
         provider: OAuthProvider.google,
         idToken: idToken,
       );
+      return true;
+    } on AppFailure {
+      rethrow;
     } on AuthException catch (e, s) {
+      // Supabase が ID トークンを受け付けなかった。ほぼ確実に Providers →
+      // Google の Authorized Client IDs に発行元のクライアント ID が無い
+      // （aud の検証で弾かれる。supabase.md §4.3）。
       AppLogger.error('auth.google_failed', e.code ?? 'auth_error', s);
       throw const AppFailure(
         FailureKind.unauthorized,
@@ -274,58 +218,136 @@ class AuthRepository {
     }
   }
 
-  /// Google サインインの失敗を画面に出してよい文言へ変換する。
+  /// Web: Firebase のポップアップから Google の ID トークンを取り出す。
   ///
-  /// 利用者がダイアログを閉じただけの中断は null を返す（エラーではない）。
-  /// ただし `canceled` は「閉じた」以外に、署名証明書の SHA-1 未登録や
-  /// JavaScript 生成元の未登録で資格情報を発行できなかった場合にも返る。
-  /// 説明文が付いているのはその後者なので、黙って戻さずエラーとして扱う。
-  /// 説明文そのものは内部状態を含みうるため画面には出さない（AGENTS.md R-7）。
-  static AppFailure? describeGoogleFailure(Object error) {
-    if (error is AppFailure) {
-      return error;
-    }
-    if (error is! GoogleSignInException) {
-      return AppFailure.from(error);
-    }
-    final String? detail = error.description?.trim();
-    final bool userClosedDialog =
-        error.code == GoogleSignInExceptionCode.canceled &&
-            (detail == null || detail.isEmpty);
-    if (userClosedDialog) {
-      return null;
-    }
-    switch (error.code) {
-      case GoogleSignInExceptionCode.clientConfigurationError:
-      case GoogleSignInExceptionCode.providerConfigurationError:
-        return const AppFailure(
+  /// 中断されたら null。Firebase Auth を使うのはここだけで、取り出した直後に
+  /// Firebase 側のセッションは破棄する（利用者 ID は Supabase のものが唯一）。
+  Future<String?> _idTokenFromPopup() async {
+    final fb.FirebaseAuth auth = _requireFirebaseAuth();
+    final fb.UserCredential result;
+    try {
+      result = await auth.signInWithPopup(fb.GoogleAuthProvider());
+    } on fb.FirebaseAuthException catch (e, s) {
+      if (_isPopupDismissed(e.code)) {
+        return null;
+      }
+      AppLogger.error('auth.google_failed', e.code, s);
+      if (e.code == 'unauthorized-domain') {
+        // Firebase コンソールの「承認済みドメイン」に今のホストが無い。
+        // プレビューチャンネルで起きやすい（gcp_firebase.md §2）。
+        throw const AppFailure(
           FailureKind.unknown,
-          'Google ログインの設定が完了していないため利用できません。'
-          'メールアドレスでのログインをお試しください。',
+          'この URL からは Google ログインを利用できません。'
+          '管理者に「承認済みドメイン」の登録を依頼してください。',
         );
-      case GoogleSignInExceptionCode.uiUnavailable:
-        return const AppFailure(
-          FailureKind.unknown,
-          'Google のログイン画面を開けませんでした。'
-          'ポップアップのブロックを解除して再度お試しください。',
-        );
-      case GoogleSignInExceptionCode.canceled:
-      case GoogleSignInExceptionCode.interrupted:
-      case GoogleSignInExceptionCode.userMismatch:
-      case GoogleSignInExceptionCode.unknownError:
-        return const AppFailure(
-          FailureKind.unknown,
-          'Google ログインに失敗しました。時間をおいて再度お試しください。',
-        );
+      }
+      throw const AppFailure(
+        FailureKind.unknown,
+        'Google ログインに失敗しました。時間をおいて再度お試しください。',
+      );
     }
+    // Firebase 自身の ID トークンではなく、Google が発行した ID トークンを使う。
+    // 前者は aud が Firebase プロジェクトなので Supabase では検証できない。
+    final fb.AuthCredential? credential = result.credential;
+    final String? idToken =
+        credential is fb.OAuthCredential ? credential.idToken : null;
+    // セッションを残すと「Firebase にはログイン済みだが Supabase には未ログイン」
+    // という食い違いが起きる。取り出したらすぐ捨てる。
+    await auth.signOut();
+    if (idToken == null) {
+      AppLogger.error('auth.google_failed', 'no_id_token', StackTrace.current);
+      throw const AppFailure(
+        FailureKind.unknown,
+        'Google ログインに失敗しました。時間をおいて再度お試しください。',
+      );
+    }
+    return idToken;
   }
 
-  /// テスト用。プロセス共有の初期化状態・進行中の交換を捨てる。
-  @visibleForTesting
-  static void debugResetGoogleSignIn() {
-    _googleInitialization = null;
-    _pendingGoogleExchange = null;
+  /// ポップアップを閉じられた（＝中断）ことを表すコードかどうか。
+  static bool _isPopupDismissed(String code) =>
+      code == 'popup-closed-by-user' ||
+      code == 'cancelled-popup-request' ||
+      code == 'user-cancelled' ||
+      code == 'web-context-cancelled';
+
+  /// Android: google_sign_in から Google の ID トークンを取り出す。
+  ///
+  /// 中断されたら null。
+  Future<String?> _idTokenFromDevice() async {
+    if (Env.googleWebClientId.isEmpty) {
+      // 未注入のまま initialize() すると idToken が null で返るだけで、
+      // 「なぜかログインできない」という分かりにくい失敗になる。
+      // ビルド設定の不備だと分かる形でここで止める。
+      throw const AppFailure(
+        FailureKind.unknown,
+        'Google ログインは現在設定中です。メールアドレスでご登録ください。',
+      );
+    }
+    final GoogleSignInAccount account;
+    try {
+      await (_googleInitialization ??= _googleSignIn.initialize(
+        // serverClientId には GCP の「ウェブ」クライアント ID を渡す。
+        // Android クライアント ID ではないことに注意（supabase.md §4.2）。
+        serverClientId: Env.googleWebClientId,
+      ));
+      account = await _googleSignIn.authenticate();
+    } on GoogleSignInException catch (e, s) {
+      // canceled は「利用者が閉じた」だけでなく、署名証明書の SHA-1 が
+      // GCP に未登録などで資格情報を発行できなかった場合にも返る。
+      // 後者まで黙って戻すと「アカウントを選んでもログイン画面に戻るだけ」
+      // という追えない失敗になるため、説明文が付いていればエラーにする。
+      // 説明文そのものは内部状態を含みうるので画面には出さない（R-7）。
+      final String? detail = e.description?.trim();
+      if (e.code == GoogleSignInExceptionCode.canceled &&
+          (detail == null || detail.isEmpty)) {
+        return null;
+      }
+      _googleInitialization = null;
+      AppLogger.error('auth.google_failed', e.code.name, s);
+      throw const AppFailure(
+        FailureKind.unknown,
+        'Google ログインに失敗しました。時間をおいて再度お試しください。',
+      );
+    }
+    final String? idToken = account.authentication.idToken;
+    if (idToken == null) {
+      AppLogger.error('auth.google_failed', 'no_id_token', StackTrace.current);
+      throw const AppFailure(
+        FailureKind.unknown,
+        'Google ログインに失敗しました。時間をおいて再度お試しください。',
+      );
+    }
+    return idToken;
   }
+
+  /// Web の Google ログインに使う Firebase Auth を返す。
+  fb.FirebaseAuth _requireFirebaseAuth() {
+    final fb.FirebaseAuth? injected = _firebaseAuth;
+    if (injected != null) {
+      return injected;
+    }
+    if (Firebase.apps.isEmpty) {
+      // main() の Firebase 初期化は設定が無いと黙ってスキップされる
+      // （GA4 が欠けるだけでアプリは動くため）。Web の Google ログインは
+      // ここに依存するので、設定漏れだと分かる形で止める。
+      throw const AppFailure(
+        FailureKind.unknown,
+        'Google ログインは現在設定中です。メールアドレスでご登録ください。',
+      );
+    }
+    return fb.FirebaseAuth.instance;
+  }
+
+  /// google_sign_in の初期化。プロセス内で 1 回だけ走らせる。
+  ///
+  /// v7 系の `initialize()` は 2 回目の呼び出しで StateError を投げるため、
+  /// 完了フラグではなく Future 自体を共有し、同時に押されても 1 回に畳む。
+  static Future<void>? _googleInitialization;
+
+  /// テスト用。プロセス共有の初期化状態を捨てる。
+  @visibleForTesting
+  static void debugResetGoogleSignIn() => _googleInitialization = null;
 
   /// ログアウトする。
   Future<void> signOut() => _client.auth.signOut();

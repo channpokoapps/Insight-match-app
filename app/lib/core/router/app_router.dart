@@ -12,8 +12,8 @@ import '../../features/auth/presentation/creator_profile_form_page.dart';
 import '../../features/auth/presentation/password_reset_page.dart';
 import '../../features/auth/presentation/role_select_page.dart';
 import '../../features/auth/presentation/sign_in_page.dart';
-import '../../features/auth/presentation/sign_up_page.dart';
 import '../../features/auth/presentation/terms_agreement_page.dart';
+import '../../features/auth/presentation/welcome_page.dart';
 import '../../features/auth/presentation/update_password_page.dart';
 import '../../features/campaign/presentation/campaign_detail_page.dart';
 import '../../features/campaign/presentation/campaign_form_page.dart';
@@ -50,14 +50,20 @@ final Provider<GoRouter> appRouterProvider = Provider<GoRouter>((Ref ref) {
             const SplashPage(),
       ),
       GoRoute(
+        path: AppRoutes.welcome,
+        builder: (BuildContext context, GoRouterState state) =>
+            const WelcomePage(),
+      ),
+      GoRoute(
         path: AppRoutes.signIn,
         builder: (BuildContext context, GoRouterState state) =>
             const SignInPage(),
       ),
+      // 新規作成はログイン画面のモード違い。入口を分けたいので URL は残す。
       GoRoute(
         path: AppRoutes.signUp,
         builder: (BuildContext context, GoRouterState state) =>
-            const SignUpPage(),
+            const SignInPage(initialSignUpMode: true),
       ),
       GoRoute(
         path: AppRoutes.passwordReset,
@@ -181,12 +187,14 @@ String? _redirect(Ref ref, GoRouterState state) {
   final String location = state.matchedLocation;
   // 認証状態は Repository/Provider 経由でのみ参照する(SupabaseClient.auth を直接触らない)。
   final bool signedIn = ref.read(currentUserProvider) != null;
-  final bool atAuthPage = location == AppRoutes.signIn ||
+  final bool atAuthPage = location == AppRoutes.welcome ||
+      location == AppRoutes.signIn ||
       location == AppRoutes.signUp ||
       location == AppRoutes.passwordReset;
 
   if (!signedIn) {
-    return atAuthPage ? null : AppRoutes.signIn;
+    // 未ログインの入口は認証ホーム画面。ログイン・新規作成はそこから開く。
+    return atAuthPage ? null : AppRoutes.welcome;
   }
 
   // 復旧セッション中の新パスワード設定は登録段階に関係なく許可する。
@@ -240,6 +248,7 @@ class AppRoutes {
   const AppRoutes._();
 
   static const String splash = '/splash';
+  static const String welcome = '/welcome';
   static const String signIn = '/sign-in';
   static const String signUp = '/sign-up';
   static const String passwordReset = '/password-reset';

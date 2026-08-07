@@ -25,8 +25,10 @@ Future<void> main() async {
     publishableKey: Env.supabaseAnonKey,
   );
 
-  // Firebase は GA4 計測（と将来の FCM）のみに使う補助機能。
-  // 未設定・初期化失敗でもアプリの起動は継続する。
+  // Firebase は GA4 計測（と将来の FCM）、および Web の Google ログインで
+  // ID トークンを取り出す窓口として使う。利用者 ID・権限は Supabase Auth が
+  // 唯一の正。未設定・初期化失敗でも起動は継続する（Google ログインだけが
+  // 使えなくなり、その旨は画面に出る）。
   await _initializeFirebase();
 
   runApp(
