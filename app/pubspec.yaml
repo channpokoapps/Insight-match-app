@@ -24,7 +24,8 @@ dependencies:
   # 郵便番号 → 住所の外部 API 呼び出し（core/address/postal_code_repository.dart）
   http: ^1.2.2
 
-  # 認証（Google サインイン。Web は signInWithOAuth を使うため Android のみで使用）
+  # 認証（Google サインイン。Web / Android とも ID トークン方式で使う）
+  # Android のアカウント選択に使う。
   google_sign_in: ^7.2.0
 
   # UI
@@ -37,8 +38,12 @@ dependencies:
   image_picker: ^1.1.2
   url_launcher: ^6.3.2
 
-  # 通知・計測（Firebase は FCM / Analytics のみ。バックエンドは Supabase）
+  # 通知・計測（Firebase は FCM / Analytics と、Web の Google ログインの
+  # ID トークン取得だけに使う。利用者 ID・権限は Supabase Auth が唯一の正）
   firebase_core: ^3.3.0
+  # Web の Google ログイン。ポップアップで Google の ID トークンを受け取り、
+  # Supabase の signInWithIdToken に渡すためだけに使う（Shift Navi と同じ方式）。
+  firebase_auth: ^5.3.1
   firebase_messaging: ^15.0.4
   firebase_analytics: ^11.6.0
 

@@ -27,7 +27,7 @@
 | 認証 | Supabase Auth（メール＋パスワード / Google サインイン。OI-26 決定済み） |
 | バックエンド | Supabase（PostgreSQL / RLS / Edge Functions / Storage / Auth） |
 | バッチ | pg_cron → Edge Function |
-| Web 配信・計測・通知 | Firebase（Hosting / Google Analytics / FCM のみ。Shift Navi とは別プロジェクト） |
+| Web 配信・計測・通知 | Firebase（Hosting / Google Analytics / FCM と、Web の Google ログインの ID トークン取得のみ。Shift Navi とは別プロジェクト） |
 
 選定理由は [docs/adr/](docs/adr/) を参照。
 

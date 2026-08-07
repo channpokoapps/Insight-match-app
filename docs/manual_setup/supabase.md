@@ -62,17 +62,21 @@ supabase db push          # supabase/migrations/ を順に適用
 >
 > アプリは自分の起動オリジンに `/` を付けた URL（例:
 > `https://<firebase-project>.web.app/`）を `redirect_to` として渡す
-> （`auth_repository.dart` の `webRedirectUrl`。OAuth・確認メール・
+> （`auth_repository.dart` の `webRedirectUrl`。確認メールと
 > パスワード再設定メールで共通）。
 > それが Redirect URLs に**一致しない**場合、Supabase はエラーを返さず
 > **Site URL へフォールバック**して戻す。
 >
-> このとき、PKCE の `code_verifier` は**ログインを開始したオリジンの
+> このとき、PKCE の `code_verifier` は**リンクを要求したオリジンの
 > localStorage** にしかない。別オリジン（Site URL 側）で受け取った `?code=` は
 > 交換できずに失敗し、セッションが張られないままログイン画面に戻る。
 >
-> 症状は「Google で続行 → アカウントを選択 → 何も起きない／登録画面に進まない」。
-> **プレビュー URL で Google ログインが完了しないときは、まずここを疑う。**
+> 症状は「メールのリンクを開いたのに何も起きない／登録画面に進まない」。
+> **プレビュー URL でメールリンクが完了しないときは、まずここを疑う。**
+>
+> **Google ログインはこの経路を使わない**（§4.2）。Google は Web でも
+> ページを離れず ID トークンを直接受け取る方式に変えたため、Redirect URLs も
+> PKCE も関与しない。
 3. 本番公開前に **SMTP（独自ドメインのメール）** を設定する。既定の送信元はレート制限が厳しい。
    送信者名（From name）は **`SNS Insight Matcher`** にする。差出人がサービス名で表示されないと、
    確認メールがフィッシングと区別できず開かれない。
@@ -99,49 +103,113 @@ Supabase **Authentication → Emails → Templates** で、以下の 3 つを差
 
 ### 4.2 Google サインイン
 
-GCP コンソール（**Firebase プロジェクトと同じ GCP プロジェクトでよい**）→ APIs & Services → Credentials:
+> **前提: アプリは Web も Android も「ID トークン方式」で統一している
+> （Shift Navi と同じ仕組み）。**
+> Web は **Firebase Authentication のポップアップ**で Google の ID トークンを
+> その場で受け取り、Android は google_sign_in から受け取る。どちらも
+> `signInWithIdToken` で Supabase に渡す（`auth_repository.dart`）。
+> **Supabase の Redirect URLs も PKCE も使わない**ので、
+> §4.1 の「無言フォールバック」はここでは起こらない。
+>
+> Firebase Auth は **Google の ID トークンを取り出す窓口**としてだけ使い、
+> 取り出した直後に Firebase 側のセッションは破棄する。
+> アプリの利用者 ID・権限は従来どおり Supabase Auth（`auth.uid()`）が唯一の正。
+
+#### 0. 自動で適用する（推奨。コンソール操作の代わり）
+
+下の 1.〜3. は GitHub Actions から API 経由で適用できる。
+
+1. GitHub → Settings → Secrets and variables → Actions に
+   **`GOOGLE_WEB_CLIENT_SECRET`** を追加する。値は GCP コンソール →
+   認証情報 → ウェブ クライアントの「クライアント シークレット」
+   （Supabase の Providers → Google に貼ってあるものと同じ値）。
+2. Actions → **「Google ログインの設定」** → Run workflow。
+   - まず `apply` を **false**（既定）のまま実行すると、**何も変更せず**に
+     足りない設定だけを一覧表示する。
+   - 内容を確認したら `apply` を **true** にして再実行すると適用される。
+   - プレビュー URL を承認済みドメインに足したいときは `preview_domain` に
+     ホスト名（スキームなし）を入れる。
+
+> **1 度だけ IAM の付与が要る。** ワークフローは `FIREBASE_SERVICE_ACCOUNT` の
+> 権限で動くため、GCP コンソール → IAM でそのサービスアカウントに
+> **「Firebase Authentication 管理者」(`roles/firebaseauth.admin`)** を付ける。
+> 付いていない場合はワークフローがその旨を明示して停止する。
+>
+> **2026-08-07 時点では未付与**（実行結果: `PERMISSION_DENIED The caller does
+> not have permission`）。付与対象のアカウント名はワークフローのログ冒頭
+> 「サービスアカウント:」の行に出る。付与しない場合は下の手動手順で設定する。
+>
+> Supabase 側（3.）は `SUPABASE_ACCESS_TOKEN`（[アクセストークン](https://supabase.com/dashboard/account/tokens)）を
+> 登録したときだけ確認・適用する。未登録なら飛ばす。
+> **1. でウェブ クライアント ID を Supabase と揃えるため、通常は 3. の変更は不要。**
+
+以下は、手作業で行う場合の内容（＝上のワークフローがやっていること）。
+
+#### 1. Firebase 側（Web ログインの本体）
+
+[gcp_firebase.md](gcp_firebase.md) §2.1 を実施する。要点は 2 つ。
+
+- **Authentication → Sign-in method → Google を有効化**する。
+- **承認済みドメイン**にアプリの配信ホストが入っていること。
+  `<firebase-project>.web.app` / `.firebaseapp.com` は**自動で入る**ので、
+  本番は追加作業なしで動く。プレビューチャンネルだけ手動追加が要る
+  （[github_automation.md](github_automation.md) §4）。
+
+有効化すると Firebase が「**ウェブ SDK の設定**」にウェブ クライアント ID と
+シークレットを表示する。**この Client ID が Google の ID トークンの `aud` になる**
+ので、以降の設定はこの値で揃える。
+
+#### 2. GCP コンソール側（Android と、Supabase の疎通用）
+
+GCP コンソール（**Firebase プロジェクトと同じ GCP プロジェクト**）→
+APIs & Services → Credentials:
 
 1. **OAuth 同意画面**を構成する（External / アプリ名 / サポートメール）。
-2. OAuth クライアントを **2 つ**作成する。
-   - **ウェブ アプリケーション**: 承認済みリダイレクト URI に
-     `https://<project-ref>.supabase.co/auth/v1/callback` を追加。
-   - **Android**: パッケージ名 `app.insightmatch.android` と **SHA-1**（下記コマンドで取得）を登録。
+2. **Android** クライアントを作成する。パッケージ名 `app.insightmatch.android` と
+   **SHA-1**（下記コマンドで取得）を登録する。
 
-     ```bash
-     cd app/android && ./gradlew signingReport   # debug 用 SHA-1
-     ```
+   ```bash
+   cd app/android && ./gradlew signingReport   # debug 用 SHA-1
+   ```
 
-     Play 公開後は **Play Console → アプリの署名** に表示される SHA-1 も追加登録する。
-3. Supabase **Authentication → Providers → Google**:
-   - Enabled: ON
-   - Client ID / Client Secret: **ウェブ**クライアントの値
-   - **Authorized Client IDs**: ウェブクライアントの Client ID を追加
-     （Android は `signInWithIdToken` で検証されるため、ここにウェブ Client ID が必要）。
+   Play 公開後は **Play Console → アプリの署名** に表示される SHA-1 も追加登録する。
+3. ウェブ クライアント（Firebase が自動作成した「Web client (auto created by
+   Google Service)」）の Client ID を、ビルドに `GOOGLE_WEB_CLIENT_ID` として
+   注入する（`env/prod.json` → GitHub Secrets `FLUTTER_ENV_PROD`）。
+   Android の `serverClientId` に使い、**ID トークンの `aud` を Web と揃える**ため。
+   未注入だと Android で「Google ログインは現在設定中です」と表示される。
 
-### 4.3 トラブルシューティング: `Unable to exchange external code`
+> **Web には「承認済みの JavaScript 生成元」の登録は不要**。
+> ポップアップの生成元検査は Firebase の「承認済みドメイン」が担当する。
 
-Google でアカウントを選択したあと
-`?error=server_error&error_description=Unable+to+exchange+external+code`
-付きの URL で戻される場合、Supabase が Google との認可コード交換に失敗している。
-原因はほぼ確実に **Google プロバイダ設定の不整合**なので、上から順に確認する。
+#### 3. Supabase 側（ID トークンの受け入れ）
 
-1. **Client Secret を貼り直す**（本命）。Authentication → Providers → Google の
-   Client Secret に、GCP の**ウェブ**クライアントの現在のシークレットを貼り直す。
-   前後の空白・改行の混入や、GCP 側でシークレットをローテーションして
-   失効した古い値が残っているケースが典型。
-2. **Client ID とシークレットの対応**を確認する。Client ID がそのシークレットの
-   属するウェブクライアントと一致していること（別クライアントの ID + 別クライアントの
-   シークレットの組み合わせは交換に失敗する）。
-3. **GCP 側の承認済みリダイレクト URI** が
-   `https://<project-ref>.supabase.co/auth/v1/callback` と**完全一致**していること
-   （§4.2 の 2. 参照。末尾スラッシュの有無やプロジェクト ref の相違に注意）。
-4. **Authorized Client IDs** にウェブクライアントの Client ID が入っていること
-   （§4.2 の 3. 参照。こちらは Android の `signInWithIdToken` 側の検証に必要）。
+**Authentication → Providers → Google**:
 
-なお「アカウントを選択したのに**エラー表示も無く**ログイン画面に戻る」場合は
-本節ではなく §4.1 の Redirect URLs 登録漏れ（無言フォールバック）を疑うこと。
-どのオリジン・どのビルドで起きたかは、ログイン画面下部の灰色の診断行
-（起動 URL のトレースとビルド識別子）で確認できる。
+- Enabled: **ON**
+- Client ID / Client Secret: 上のウェブ クライアントの値
+- **Authorized Client IDs**: 同じウェブ クライアントの Client ID を追加。
+  **Web / Android とも `signInWithIdToken` の `aud` 検証に使うため必須**。
+  Firebase のウェブ SDK 設定と `GOOGLE_WEB_CLIENT_ID` が別の値になっている場合は
+  **両方**をカンマ区切りで登録する。
+
+### 4.3 トラブルシューティング: Google でログインできない
+
+「Google で続行 → ログインできない」ときは、症状ごとに見る場所が違う。
+
+| 症状 | 見るところ |
+|---|---|
+| ポップアップが開かない | ブラウザのポップアップブロック。アドレスバーの表示を確認する |
+| 「この URL からは Google ログインを利用できません」と出る | Firebase の**承認済みドメイン**に今のホストが無い（§4.2 の 1.）。プレビューで起きやすい |
+| アカウント選択後に「Google ログインに失敗しました」と出る | Supabase → Providers → Google の **Authorized Client IDs** に、そのトークンの発行元クライアント ID が無い（§4.2 の 3.）。`aud` の検証で弾かれている |
+| 「Google ログインは現在設定中です」と出る | Web は Firebase 設定（`env/web_firebase_config.json`）が未注入。Android は `GOOGLE_WEB_CLIENT_ID` が未注入 |
+| Android だけ失敗する | GCP の **Android クライアント**の SHA-1 未登録。`serverClientId` にウェブ クライアント ID を渡していることも確認する |
+
+どのホストの、どのビルドを見ているかは、認証ホーム画面の下部にある灰色の
+診断行（起動 URL のトレースとビルド識別子）で確認できる。
+
+> **メールのリンク**（確認メール・パスワード再設定）が完了しない場合は
+> 本節ではなく §4.1 の Redirect URLs 登録漏れ（無言フォールバック）を疑うこと。
 
 ## 5. Edge Functions（Phase 3 以降）
 

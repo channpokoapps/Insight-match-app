@@ -48,7 +48,30 @@ Firebase は次の 3 つだけに使う。バックエンドは Supabase（[supa
    ```
 
 5. 公開 URL（`https://<project-id>.web.app`）を Supabase の
-   **Auth → URL Configuration**（Site URL / Redirect URLs）に登録する（[supabase.md](supabase.md) §4.1）。
+   **Auth → URL Configuration**（Site URL / Redirect URLs）に登録する。
+   確認メール・パスワード再設定メールのリンク用（[supabase.md](supabase.md) §4.1）。
+
+### 2.1 Authentication（Web の Google ログイン）
+
+Web の「Google で続行」は Firebase Authentication の**ポップアップ**で
+Google の ID トークンを受け取り、それを Supabase に渡す方式
+（[supabase.md](supabase.md) §4.2）。**Firebase Auth はこの窓口としてだけ使い、
+アプリの利用者 ID・権限は Supabase Auth が唯一の正**。
+
+1. Firebase コンソール → **Authentication** → 「始める」
+2. **Sign-in method → Google** を選び、**有効にする**。
+   - プロジェクトの公開名とサポートメールを設定する。
+   - 「**ウェブ SDK の設定**」を展開し、表示される**ウェブ クライアント ID**を控える。
+     これが Google の ID トークンの `aud` になり、
+     Supabase の **Authorized Client IDs** に入れる値になる
+     （[supabase.md](supabase.md) §4.2 の 3.）。
+3. **Settings → 承認済みドメイン**を確認する。
+   `<project-id>.web.app` と `<project-id>.firebaseapp.com` は**自動で入る**ため、
+   本番は追加作業なしで動く。**プレビューチャンネルの URL だけ手動追加が必要**
+   （[github_automation.md](github_automation.md) §4）。
+
+> **メール / パスワードの Sign-in method は有効にしない。**
+> メール認証は Supabase 側で完結しており、Firebase 側に利用者を作らない。
 
 ## 3. Android アプリ登録
 
