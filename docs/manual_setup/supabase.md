@@ -135,6 +135,10 @@ Supabase **Authentication → Emails → Templates** で、以下の 3 つを差
 > **「Firebase Authentication 管理者」(`roles/firebaseauth.admin`)** を付ける。
 > 付いていない場合はワークフローがその旨を明示して停止する。
 >
+> **2026-08-07 時点では未付与**（実行結果: `PERMISSION_DENIED The caller does
+> not have permission`）。付与対象のアカウント名はワークフローのログ冒頭
+> 「サービスアカウント:」の行に出る。付与しない場合は下の手動手順で設定する。
+>
 > Supabase 側（3.）は `SUPABASE_ACCESS_TOKEN`（[アクセストークン](https://supabase.com/dashboard/account/tokens)）を
 > 登録したときだけ確認・適用する。未登録なら飛ばす。
 > **1. でウェブ クライアント ID を Supabase と揃えるため、通常は 3. の変更は不要。**

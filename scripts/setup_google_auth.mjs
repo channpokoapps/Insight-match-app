@@ -389,6 +389,9 @@ async function main() {
   const clientSecret = (process.env.GOOGLE_WEB_CLIENT_SECRET ?? '').trim();
 
   console.log(`対象 Firebase プロジェクト: ${projectId}`);
+  // 権限不足のときに「どのアカウントに付与するのか」が分からないと動けない。
+  // サービスアカウントのメールアドレスは資格情報ではなく識別子なので出してよい。
+  console.log(`サービスアカウント: ${serviceAccount.client_email}`);
   console.log(`モード: ${APPLY ? '適用 (APPLY=true)' : '確認のみ (APPLY=false)'}`);
   console.log('');
 
