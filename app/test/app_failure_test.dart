@@ -1,6 +1,7 @@
 import 'package:insight_match/core/error/app_failure.dart';
 import 'package:insight_match/features/chat/domain/message.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 void main() {
   group('AppFailure', () {
@@ -23,6 +24,36 @@ void main() {
           Exception('duplicate key value violates unique constraint'));
       expect(failure.kind, FailureKind.unknown);
       expect(failure.message.contains('constraint'), isFalse);
+    });
+
+    test('列が無い応答をサーバー未更新として案内する', () {
+      // 本番 DB にマイグレーションが未反映のときに来る応答
+      // （案件作成画面が開けなくなっていた原因）。
+      final AppFailure failure = AppFailure.from(
+        const PostgrestException(
+          message: 'column client_profiles.genre_ids does not exist',
+          code: '42703',
+        ),
+      );
+      expect(failure.kind, FailureKind.serverOutdated);
+      expect(failure.message.contains('genre_ids'), isFalse);
+      expect(failure.message.contains('反映'), isTrue);
+    });
+
+    test('スキーマキャッシュに無い関数もサーバー未更新として扱う', () {
+      final AppFailure failure = AppFailure.from(
+        const PostgrestException(
+          message: 'Could not find the function public.count_matching_creators',
+          code: 'PGRST202',
+        ),
+      );
+      expect(failure.kind, FailureKind.serverOutdated);
+    });
+
+    test('変換済みの AppFailure を unknown に潰さない', () {
+      const AppFailure original =
+          AppFailure(FailureKind.conflict, 'すでに公開済みです。');
+      expect(AppFailure.from(original), same(original));
     });
 
     test('toString に元の例外内容を含めない', () {
