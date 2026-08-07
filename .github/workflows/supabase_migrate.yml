@@ -1,7 +1,7 @@
 name: Supabase マイグレーション反映
 
 # 本番 Supabase に「どのマイグレーションまで適用済みか」を確認し、
-# 未適用があれば適用する。手動実行のみ。
+# 未適用があれば適用する。適用は手動実行のときだけ。
 #
 # なぜ要るか:
 #   deploy_production.yml は Hosting しか自動反映しない（OI-45）。DB の反映は
@@ -27,6 +27,14 @@ on:
         description: '履歴より古い番号のマイグレーションも含めて適用する（db push --include-all）'
         type: boolean
         default: false
+  # このワークフロー自身を変更したときだけ、確認のみで自動実行する。
+  # workflow_dispatch は main にファイルが無いと選べないため、マージ前に
+  # 設定（Secrets / Variable）と接続を確かめる手段がなくなるのを避ける。
+  # push では絶対に適用しない（下の APPLY を参照）。
+  push:
+    branches: ['claude/**']
+    paths:
+      - '.github/workflows/supabase_migrate.yml'
 
 concurrency:
   group: supabase-migrate
@@ -44,6 +52,9 @@ jobs:
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
       SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
       PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+      # 適用は手動実行で apply を選んだときだけ。push では必ず確認のみ。
+      APPLY: ${{ github.event_name == 'workflow_dispatch' && inputs.apply || false }}
+      INCLUDE_ALL: ${{ github.event_name == 'workflow_dispatch' && inputs.include_all || false }}
     steps:
       - uses: actions/checkout@v4
 
@@ -62,7 +73,7 @@ jobs:
           [ "$HAS_PASSWORD" = "true" ] || missing="${missing} SUPABASE_DB_PASSWORD(secret)"
           [ -n "${PROJECT_REF}" ]      || missing="${missing} SUPABASE_PROJECT_REF(variable)"
           if [ -n "$missing" ]; then
-            echo "::error::次の設定が未登録です:${missing} — 登録手順は docs/manual_setup/github_automation.md §5"
+            echo "::error::次の設定が未登録です:${missing} — 登録手順は docs/manual_setup/github_automation.md §6"
             exit 1
           fi
 
@@ -85,18 +96,18 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: 未適用のマイグレーションを適用
-        if: ${{ inputs.apply }}
+        if: ${{ env.APPLY == 'true' }}
         run: |
           set -euo pipefail
           # 端末ではないため CLI は確認プロンプトを出さずに進む。
-          if [ "${{ inputs.include_all }}" = "true" ]; then
+          if [ "${INCLUDE_ALL}" = "true" ]; then
             supabase db push --linked --include-all
           else
             supabase db push --linked
           fi
 
       - name: 適用後の一覧
-        if: ${{ inputs.apply }}
+        if: ${{ env.APPLY == 'true' }}
         run: |
           set -euo pipefail
           supabase migration list --linked | tee migration_list_after.txt
@@ -114,7 +125,7 @@ jobs:
           {
             echo ''
             echo '### 次の行動'
-            if [ "${{ inputs.apply }}" != "true" ]; then
+            if [ "${APPLY}" != "true" ]; then
               echo '- Remote 欄が空のマイグレーションが未適用。適用するには apply にチェックを入れて再実行する。'
             fi
             echo '- Edge Functions は別途 `supabase functions deploy` が必要（このワークフローの対象外）。'
