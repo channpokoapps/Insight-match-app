@@ -35,6 +35,8 @@
 | Variable | `FIREBASE_PROJECT_ID` | `insight-match-2fbaa` | §2 |
 | Secret | `FLUTTER_ENV_PROD` | `env/prod.json` の全文 | §3 |
 | Secret | `FLUTTER_WEB_FIREBASE_CONFIG` | `env/web_firebase_config.json` の全文 | §3 |
+| Secret（任意） | `GOOGLE_WEB_CLIENT_SECRET` | ウェブ OAuth クライアントのシークレット。「Google ログインの設定」ワークフローで使う | [supabase.md](supabase.md) §4.2 |
+| Secret（任意） | `SUPABASE_ACCESS_TOKEN` | Supabase のアクセストークン。同ワークフローが Supabase 側も確認する場合のみ | [supabase.md](supabase.md) §4.2 |
 | Secret | `ANDROID_KEYSTORE_BASE64` | upload キーストアの base64 | §5 |
 | Secret | `ANDROID_KEYSTORE_PASSWORD` / `ANDROID_KEY_PASSWORD` / `ANDROID_KEY_ALIAS` | キーストアのパスワード・エイリアス | §5 |
 | Secret | `ANDROID_GOOGLE_SERVICES_JSON_BASE64` | `google-services.json` の base64 | §5 |
@@ -143,6 +145,10 @@ gh secret set FLUTTER_WEB_FIREBASE_CONFIG -R channpokoapps/Insight-match-app < e
    Redirect URLs はホスト名部分にも `*` を使えるため、こう登録しておけば
    チャンネルのランダム部分が変わっても登録し直さなくてよい。
 
+> 手順 2 は Actions → **「Google ログインの設定」** の `preview_domain` に
+> ホスト名を入れて `apply: true` で実行しても登録できる
+> （[supabase.md](supabase.md) §4.2 の 0.）。
+>
 > **手順 2 を飛ばすと、プレビューで Google ログインができない。**
 > 承認済みドメインに無いホストからのポップアップは Firebase が拒否し、
 > 画面に「この URL からは Google ログインを利用できません」と表示される。

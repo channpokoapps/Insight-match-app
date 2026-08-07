@@ -1,0 +1,53 @@
+name: Google ログインの設定
+
+# Google ログインに必要なコンソール設定（Firebase Authentication の
+# Google プロバイダ有効化・承認済みドメイン）を API から適用する。
+# 手作業のクリックを置き換えるためのもので、手順書は
+# docs/manual_setup/supabase.md §4.2。
+#
+# 既定は「確認のみ」。何が足りないかを一覧で出すだけで、何も変更しない。
+# 実際に適用するときだけ apply を true にして実行する。
+on:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: '実際に適用する（false なら確認のみ）'
+        type: boolean
+        default: false
+      preview_domain:
+        description: '承認済みドメインに追加するホスト名（例: insight-match-2fbaa--preview-xxxxxxxx.web.app）。空なら追加しない'
+        type: string
+        default: ''
+
+jobs:
+  google-signin:
+    name: Google プロバイダの設定
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Secrets の有無を確認
+        id: secrets
+        env:
+          HAS_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT != '' }}
+          HAS_ENV: ${{ secrets.FLUTTER_ENV_PROD != '' }}
+        run: |
+          if [ "$HAS_SA" != "true" ] || [ "$HAS_ENV" != "true" ]; then
+            echo "::error::FIREBASE_SERVICE_ACCOUNT / FLUTTER_ENV_PROD が未設定です。docs/manual_setup/github_automation.md を参照してください。"
+            exit 1
+          fi
+
+      # 適用にはウェブ クライアントのシークレットが要る。確認のみなら不要。
+      - name: 設定を適用・確認
+        env:
+          APPLY: ${{ inputs.apply }}
+          PREVIEW_DOMAIN: ${{ inputs.preview_domain }}
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          FLUTTER_ENV_PROD: ${{ secrets.FLUTTER_ENV_PROD }}
+          GOOGLE_WEB_CLIENT_SECRET: ${{ secrets.GOOGLE_WEB_CLIENT_SECRET }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: node scripts/setup_google_auth.mjs

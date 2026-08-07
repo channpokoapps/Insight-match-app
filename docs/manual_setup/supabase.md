@@ -115,6 +115,32 @@ Supabase **Authentication → Emails → Templates** で、以下の 3 つを差
 > 取り出した直後に Firebase 側のセッションは破棄する。
 > アプリの利用者 ID・権限は従来どおり Supabase Auth（`auth.uid()`）が唯一の正。
 
+#### 0. 自動で適用する（推奨。コンソール操作の代わり）
+
+下の 1.〜3. は GitHub Actions から API 経由で適用できる。
+
+1. GitHub → Settings → Secrets and variables → Actions に
+   **`GOOGLE_WEB_CLIENT_SECRET`** を追加する。値は GCP コンソール →
+   認証情報 → ウェブ クライアントの「クライアント シークレット」
+   （Supabase の Providers → Google に貼ってあるものと同じ値）。
+2. Actions → **「Google ログインの設定」** → Run workflow。
+   - まず `apply` を **false**（既定）のまま実行すると、**何も変更せず**に
+     足りない設定だけを一覧表示する。
+   - 内容を確認したら `apply` を **true** にして再実行すると適用される。
+   - プレビュー URL を承認済みドメインに足したいときは `preview_domain` に
+     ホスト名（スキームなし）を入れる。
+
+> **1 度だけ IAM の付与が要る。** ワークフローは `FIREBASE_SERVICE_ACCOUNT` の
+> 権限で動くため、GCP コンソール → IAM でそのサービスアカウントに
+> **「Firebase Authentication 管理者」(`roles/firebaseauth.admin`)** を付ける。
+> 付いていない場合はワークフローがその旨を明示して停止する。
+>
+> Supabase 側（3.）は `SUPABASE_ACCESS_TOKEN`（[アクセストークン](https://supabase.com/dashboard/account/tokens)）を
+> 登録したときだけ確認・適用する。未登録なら飛ばす。
+> **1. でウェブ クライアント ID を Supabase と揃えるため、通常は 3. の変更は不要。**
+
+以下は、手作業で行う場合の内容（＝上のワークフローがやっていること）。
+
 #### 1. Firebase 側（Web ログインの本体）
 
 [gcp_firebase.md](gcp_firebase.md) §2.1 を実施する。要点は 2 つ。
