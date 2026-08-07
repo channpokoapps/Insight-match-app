@@ -157,12 +157,32 @@ function isPermissionDenied(result) {
   return result.status === 401 || result.status === 403;
 }
 
-function permissionHint(projectId) {
+/**
+ * 401/403 の理由を切り分けて案内する。
+ *
+ * 同じ 403 でも「API 自体が無効」と「IAM の権限不足」で対処が違うため、
+ * API が返したメッセージを見て振り分ける。原因を取り違えると、
+ * 効かない設定作業を延々やらせることになる。
+ */
+function permissionHint(projectId, result) {
+  const error = result?.body?.error ?? {};
+  const raw = `${error.status ?? ''} ${error.message ?? ''}`.trim();
+
+  const apiDisabled =
+    /SERVICE_DISABLED/i.test(raw) ||
+    /has not been used in project|is disabled/i.test(raw);
+  if (apiDisabled) {
+    return (
+      'Identity Toolkit API が無効です。Firebase コンソール → Authentication で ' +
+      '一度「始める」を押すか、GCP コンソールで identitytoolkit.googleapis.com を' +
+      `有効化してください（プロジェクト: ${projectId}）。API 応答: ${raw}`
+    );
+  }
   return (
     'サービスアカウントに Firebase Authentication の管理権限がありません。' +
-    `GCP コンソール → IAM で FIREBASE_SERVICE_ACCOUNT のアカウントに ` +
-    `「Firebase Authentication 管理者」(roles/firebaseauth.admin) を付与してください` +
-    `（プロジェクト: ${projectId}）。`
+    'GCP コンソール → IAM で FIREBASE_SERVICE_ACCOUNT のアカウントに ' +
+    '「Firebase Authentication 管理者」(roles/firebaseauth.admin) を付与してください' +
+    `（プロジェクト: ${projectId}）。API 応答: ${raw}`
   );
 }
 
@@ -176,7 +196,7 @@ async function ensureGoogleProvider(token, projectId, clientId, clientSecret) {
 
   if (isPermissionDenied(current)) {
     unresolved += 1;
-    log('Google プロバイダ', 'NG', permissionHint(projectId));
+    log('Google プロバイダ', 'NG', permissionHint(projectId, current));
     return;
   }
 
@@ -225,7 +245,7 @@ async function ensureGoogleProvider(token, projectId, clientId, clientSecret) {
     unresolved += 1;
     const apiMessage = result.body?.error?.message ?? `HTTP ${result.status}`;
     const reason = isPermissionDenied(result)
-      ? permissionHint(projectId)
+      ? permissionHint(projectId, result)
       : clientSecret
         ? apiMessage
         : `${apiMessage}（GOOGLE_WEB_CLIENT_SECRET を登録すると解決する可能性があります）`;
@@ -249,7 +269,7 @@ async function ensureAuthorizedDomain(token, projectId, domain) {
   if (!current.ok) {
     unresolved += 1;
     const reason = isPermissionDenied(current)
-      ? permissionHint(projectId)
+      ? permissionHint(projectId, current)
       : current.body?.error?.message ?? `HTTP ${current.status}`;
     log('承認済みドメイン', 'NG', reason);
     return;
