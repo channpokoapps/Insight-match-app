@@ -1,0 +1,122 @@
+name: Supabase マイグレーション反映
+
+# 本番 Supabase に「どのマイグレーションまで適用済みか」を確認し、
+# 未適用があれば適用する。手動実行のみ。
+#
+# なぜ要るか:
+#   deploy_production.yml は Hosting しか自動反映しない（OI-45）。DB の反映は
+#   PC で `supabase db push --linked` を叩く運用だったため、スマホだけで回す
+#   PoC 運用（docs/poc_guide.md）では反映漏れが起きる。実際に 0011 以降が
+#   未適用のまま `app/` だけ新しくなると、案件作成画面が
+#   「店舗情報を取得できませんでした。」で開けなくなる（client_profiles.genre_ids が無いため）。
+#
+# 安全側の設計:
+#   - 既定は **確認のみ**。何も変更せず、適用済み／未適用の一覧を出すだけ。
+#   - 適用は apply=true を選んだ手動実行のときだけ。push では絶対に走らせない。
+#   - R-1〜R-5 に関わる変更は人間が中身をレビューしたうえで実行すること
+#     （このワークフローは「反映の手段」を提供するだけで、レビューの代わりではない）。
+
+on:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: '未適用のマイグレーションを実際に適用する（false なら一覧の確認のみ）'
+        type: boolean
+        default: false
+      include_all:
+        description: '履歴より古い番号のマイグレーションも含めて適用する（db push --include-all）'
+        type: boolean
+        default: false
+
+concurrency:
+  group: supabase-migrate
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  migrate:
+    name: 適用状況の確認と反映
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Secrets / Variables の有無を確認
+        env:
+          HAS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN != '' }}
+          HAS_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD != '' }}
+        run: |
+          set -euo pipefail
+          missing=""
+          [ "$HAS_TOKEN" = "true" ]    || missing="${missing} SUPABASE_ACCESS_TOKEN(secret)"
+          [ "$HAS_PASSWORD" = "true" ] || missing="${missing} SUPABASE_DB_PASSWORD(secret)"
+          [ -n "${PROJECT_REF}" ]      || missing="${missing} SUPABASE_PROJECT_REF(variable)"
+          if [ -n "$missing" ]; then
+            echo "::error::次の設定が未登録です:${missing} — 登録手順は docs/manual_setup/github_automation.md §5"
+            exit 1
+          fi
+
+      - name: プロジェクトへ link
+        run: supabase link --project-ref "${PROJECT_REF}"
+
+      # Local = リポジトリの supabase/migrations、Remote = 本番 DB に適用済みの版。
+      # Remote が空欄の行が「未適用」。ここが案件作成の不具合の切り分けに直結する。
+      - name: 適用状況の一覧（変更なし）
+        id: before
+        run: |
+          set -euo pipefail
+          supabase migration list --linked | tee migration_list.txt
+          {
+            echo '## 適用状況（実行前）'
+            echo ''
+            echo '```'
+            cat migration_list.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: 未適用のマイグレーションを適用
+        if: ${{ inputs.apply }}
+        run: |
+          set -euo pipefail
+          # 端末ではないため CLI は確認プロンプトを出さずに進む。
+          if [ "${{ inputs.include_all }}" = "true" ]; then
+            supabase db push --linked --include-all
+          else
+            supabase db push --linked
+          fi
+
+      - name: 適用後の一覧
+        if: ${{ inputs.apply }}
+        run: |
+          set -euo pipefail
+          supabase migration list --linked | tee migration_list_after.txt
+          {
+            echo '## 適用状況（実行後）'
+            echo ''
+            echo '```'
+            cat migration_list_after.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: 次の行動を案内
+        if: ${{ always() }}
+        run: |
+          {
+            echo ''
+            echo '### 次の行動'
+            if [ "${{ inputs.apply }}" != "true" ]; then
+              echo '- Remote 欄が空のマイグレーションが未適用。適用するには apply にチェックを入れて再実行する。'
+            fi
+            echo '- Edge Functions は別途 `supabase functions deploy` が必要（このワークフローの対象外）。'
+            echo '- 手作業で SQL を流したなどで履歴がずれている場合は `supabase migration repair` が要る。エラー本文を Issue に貼って相談すること。'
+          } >> "$GITHUB_STEP_SUMMARY"

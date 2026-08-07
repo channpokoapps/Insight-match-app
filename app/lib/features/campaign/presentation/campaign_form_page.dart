@@ -95,14 +95,19 @@ class _CampaignFormPageState extends ConsumerState<CampaignFormPage> {
   }
 
   /// 店舗プロフィールからの初期値を、最初の 1 回だけ反映する。
+  ///
+  /// 取得に失敗したあと再試行で届くこともあるため、
+  /// すでに入力済みの内容は上書きしない。
   void _prefillFromStore(StoreDefaults defaults) {
     if (_prefilled) {
       return;
     }
     _prefilled = true;
     _defaults = defaults;
-    _storeName.text = defaults.storeName;
-    _genreId = defaults.genreId;
+    if (_storeName.text.trim().isEmpty) {
+      _storeName.text = defaults.storeName;
+    }
+    _genreId ??= defaults.genreId;
   }
 
   /// 編集対象の案件を、最初の 1 回だけフォームへ流し込む。
@@ -358,9 +363,14 @@ class _CampaignFormPageState extends ConsumerState<CampaignFormPage> {
     final AsyncValue<StoreDefaults> defaults = ref.watch(storeDefaultsProvider);
     return defaults.when(
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (Object e, StackTrace _) => RetryNotice(
-        message: '店舗情報を取得できませんでした。',
-        onRetry: () => ref.invalidate(storeDefaultsProvider),
+      // 店舗プロフィールの初期値は入力の手間を省くだけの機能（FR-CMP-02）。
+      // 取れなくても案件は作成できるため、画面ごと止めずに注意書きを出す。
+      error: (Object e, StackTrace _) => _buildForm(
+        context,
+        notice: _StoreDefaultsNotice(
+          message: AppFailure.from(e).message,
+          onRetry: () => ref.invalidate(storeDefaultsProvider),
+        ),
       ),
       data: (StoreDefaults value) {
         _prefillFromStore(value);
@@ -386,7 +396,7 @@ class _CampaignFormPageState extends ConsumerState<CampaignFormPage> {
     );
   }
 
-  Widget _buildForm(BuildContext context) {
+  Widget _buildForm(BuildContext context, {Widget? notice}) {
     final ThemeData theme = Theme.of(context);
     final AsyncValue<List<MasterItem>> genres = ref.watch(genresProvider);
     // 応募後は募集条件・人数・期間・投稿対象を触らせない（FR-CMP-13）。
@@ -400,6 +410,10 @@ class _CampaignFormPageState extends ConsumerState<CampaignFormPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: <Widget>[
+                if (notice != null) ...<Widget>[
+                  notice,
+                  const SizedBox(height: 16),
+                ],
                 if (_locked) ...<Widget>[
                   const _LockedNotice(),
                   const SizedBox(height: 16),
@@ -666,6 +680,56 @@ class _CampaignFormPageState extends ConsumerState<CampaignFormPage> {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// 店舗プロフィールの初期値を引けなかったときの案内。
+///
+/// 案件作成そのものは続けられることを明示する（止まっていると誤解させない）。
+class _StoreDefaultsNotice extends StatelessWidget {
+  const _StoreDefaultsNotice({required this.message, required this.onRetry});
+
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.orange.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.orange.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Icon(Icons.info_outline, size: 20, color: Colors.orange.shade800),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  '店舗情報を自動入力できませんでした。$message'
+                  ' 店舗名などを入力すれば、このまま案件を作成できます。',
+                  style: theme.textTheme.bodySmall?.copyWith(height: 1.5),
+                ),
+              ),
+            ],
+          ),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              icon: const Icon(Icons.refresh, size: 18),
+              label: const Text('自動入力を再試行'),
+              onPressed: onRetry,
+            ),
+          ),
+        ],
       ),
     );
   }

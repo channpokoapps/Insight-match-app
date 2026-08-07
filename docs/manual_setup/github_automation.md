@@ -25,6 +25,7 @@
 | `deploy_preview.yml`（PR のプレビュー） | §2・§3 の Secrets / Variables | 案内を出してスキップ |
 | `deploy_production.yml`（本番反映） | §2・§3 の Secrets / Variables | 案内を出してスキップ |
 | `android_build.yml`（APK 配布） | §2・§3・§5 の Secrets / Variables | ジョブが失敗する |
+| `supabase_migrate.yml`（DB の反映・手動実行） | §6 の Secrets / Variable | 不足名を出して失敗する |
 
 登録する一覧（すべて Settings → Secrets and variables → Actions でも確認できる）:
 
@@ -36,7 +37,9 @@
 | Secret | `FLUTTER_ENV_PROD` | `env/prod.json` の全文 | §3 |
 | Secret | `FLUTTER_WEB_FIREBASE_CONFIG` | `env/web_firebase_config.json` の全文 | §3 |
 | Secret（任意） | `GOOGLE_WEB_CLIENT_SECRET` | ウェブ OAuth クライアントのシークレット。「Google ログインの設定」ワークフローで使う | [supabase.md](supabase.md) §4.2 |
-| Secret（任意） | `SUPABASE_ACCESS_TOKEN` | Supabase のアクセストークン。同ワークフローが Supabase 側も確認する場合のみ | [supabase.md](supabase.md) §4.2 |
+| Secret | `SUPABASE_ACCESS_TOKEN` | Supabase のアクセストークン。「Google ログインの設定」と「Supabase マイグレーション反映」で使う | §6 |
+| Secret | `SUPABASE_DB_PASSWORD` | 本番 DB のパスワード（プロジェクト作成時に決めたもの） | §6 |
+| Variable | `SUPABASE_PROJECT_REF` | Supabase の Reference ID | §6 |
 | Secret | `ANDROID_KEYSTORE_BASE64` | upload キーストアの base64 | §5 |
 | Secret | `ANDROID_KEYSTORE_PASSWORD` / `ANDROID_KEY_PASSWORD` / `ANDROID_KEY_ALIAS` | キーストアのパスワード・エイリアス | §5 |
 | Secret | `ANDROID_GOOGLE_SERVICES_JSON_BASE64` | `google-services.json` の base64 | §5 |
@@ -228,7 +231,34 @@ base64 -i app/android/app/google-services.json | gh secret set ANDROID_GOOGLE_SE
 
 ---
 
-## 6. トラブルシューティング
+## 6. Supabase の DB 反映（スマホから実行できるようにする）
+
+`supabase/migrations/` の変更は、マージしても本番 DB には入らない
+（自動反映しない理由は §7）。反映漏れのまま `app/` だけ新しくなると、
+アプリが「まだ無い列」を読みに行って画面が開けなくなる。これを PC 無しで
+確認・反映できるようにするのが `supabase_migrate.yml`。
+
+1. [アクセストークン](https://supabase.com/dashboard/account/tokens)を発行し、
+   本番 DB のパスワードと Reference ID（ダッシュボードの Project Settings →
+   General）を用意する。
+
+   ```bash
+   gh secret set SUPABASE_ACCESS_TOKEN -R channpokoapps/Insight-match-app
+   gh secret set SUPABASE_DB_PASSWORD  -R channpokoapps/Insight-match-app
+   gh variable set SUPABASE_PROJECT_REF -R channpokoapps/Insight-match-app --body "<Reference ID>"
+   ```
+
+2. 使い方は **Actions → 「Supabase マイグレーション反映」→ Run workflow**。
+   既定（`apply` オフ）は**確認のみ**で DB を変更しない。Summary の一覧で
+   **Remote 欄が空の行が未適用**。適用するときだけ `apply` にチェックを入れる。
+
+> DB パスワードは**本番のインサイト実数値がある DB** への鍵になる。
+> Secrets 以外の場所（Issue・PR・チャット）に貼らないこと。
+> Edge Functions の反映はこのワークフローの対象外（`supabase functions deploy`）。
+
+---
+
+## 7. トラブルシューティング
 
 | 症状 | 原因と対処 |
 | --- | --- |
@@ -237,17 +267,19 @@ base64 -i app/android/app/google-services.json | gh secret set ANDROID_GOOGLE_SE
 | プレビュー / 本番反映が「Secrets 未設定」でスキップされる | §2〜§3 が未完了。PR コメントと Actions の warning に不足名が出る |
 | プレビューは開けるがログインできない | §4 の登録漏れ。プレビュー URL が変わった（30 日失効）場合も同じ |
 | `/apk` が「Secret が未設定です」で失敗する | §5 が未完了。エラーメッセージに不足している Secret 名が出る |
+| アプリに「アプリの更新がサーバー側にまだ反映されていません」と出る | DB のマイグレーションが未反映。§6 のワークフローで確認・適用する |
 | APK は届くが Google ログインに失敗する | §5-2 の SHA-1 登録漏れ、または google-services.json の Secret が古い |
 | APK の更新がインストールできない（「アプリはインストールされていません」等） | 署名が変わっている。以前のキーストアを復元するか、端末側でアンインストールしてから入れ直す |
 
 ---
 
-## 7. セキュリティ上の約束（AGENTS.md との関係）
+## 8. セキュリティ上の約束（AGENTS.md との関係）
 
 - サービスアカウント鍵・キーストア・env ファイルを**リポジトリにコミットしない**
   （このリポジトリは公開。Secrets 経由でのみ CI に渡す）
 - サービスアカウントのロールは Hosting と App Distribution の管理者のみ。
   **Supabase（インサイト実数値のある本番 DB）には一切アクセスできない**
-- 本番 Supabase への反映（マイグレーション・Edge Functions）を自動化しないのは
+- 本番 Supabase への反映（マイグレーション・Edge Functions）を**マージで自動実行しない**のは
   意図的な判断（R-1〜R-5 の防衛線を人間のレビュー＋手動操作に残すため）。
+  §6 のワークフローも既定は確認のみで、適用は人間が明示的に選んだときだけ走る。
   再検討する場合は [../open_issues.md](../open_issues.md) の `OI-45` を参照
