@@ -104,7 +104,7 @@ jobs:
             exit 0
           fi
           python3 - <<'PY' > /tmp/db_url
-          import json, os, sys, urllib.parse, urllib.request
+          import json, os, socket, sys, urllib.parse, urllib.request
 
           ref = os.environ['PROJECT_REF']
           token = os.environ['SUPABASE_ACCESS_TOKEN']
@@ -113,32 +113,60 @@ jobs:
           def api(path):
               req = urllib.request.Request(
                   'https://api.supabase.com/v1' + path,
-                  headers={'Authorization': 'Bearer ' + token},
+                  headers={
+                      'Authorization': 'Bearer ' + token,
+                      'Accept': 'application/json',
+                      # 既定の Python-urllib は手前で 403 に弾かれるため明示する。
+                      'User-Agent': 'insight-match-ci',
+                  },
               )
               with urllib.request.urlopen(req, timeout=30) as res:
                   return json.load(res)
 
-          host, user = None, None
+          def reachable(host):
+              """IPv4 で引けるか。runner は IPv4 のみで、直結ホストは IPv6 専用のことがある。"""
+              try:
+                  return bool(socket.getaddrinfo(host, 5432, socket.AF_INET))
+              except OSError:
+                  return False
+
+          candidates = []
           try:
               cfg = api(f'/projects/{ref}/config/database/pooler')
-              entries = cfg if isinstance(cfg, list) else [cfg]
-              for entry in entries:
+              for entry in (cfg if isinstance(cfg, list) else [cfg]):
                   if entry.get('db_host'):
-                      host = entry['db_host']
-                      user = entry.get('db_user') or f'postgres.{ref}'
-                      break
+                      candidates.append(
+                          (entry['db_host'], entry.get('db_user') or f'postgres.{ref}'))
           except Exception as e:
-              print(f'pooler の設定を取得できませんでした: {e}', file=sys.stderr)
+              print(f'pooler 設定の取得に失敗: {e}', file=sys.stderr)
 
-          if not host:
-              # 直結にフォールバックする。IPv6 のみなら接続で落ちるが、
-              # そのときは SUPABASE_DB_URL を登録すればよい（案内は下のステップ）。
-              host, user = f'db.{ref}.supabase.co', 'postgres'
-              print('pooler が引けないため直結ホストを使います。', file=sys.stderr)
+          if not candidates:
+              # リージョンから pooler のホスト名を組み立てる。世代で接頭辞が違う。
+              try:
+                  for p in api('/projects'):
+                      if p.get('id') == ref and p.get('region'):
+                          for n in (0, 1, 2):
+                              candidates.append((
+                                  f'aws-{n}-{p["region"]}.pooler.supabase.com',
+                                  f'postgres.{ref}',
+                              ))
+                          break
+              except Exception as e:
+                  print(f'プロジェクト一覧の取得に失敗: {e}', file=sys.stderr)
 
-          print(f'host={host}', file=sys.stderr)
-          quoted = urllib.parse.quote(password, safe='')
-          print(f'postgresql://{user}:{quoted}@{host}:5432/postgres')
+          candidates.append((f'db.{ref}.supabase.co', 'postgres'))
+
+          for host, user in candidates:
+              if reachable(host):
+                  print(f'接続先ホスト: {host}', file=sys.stderr)
+                  quoted = urllib.parse.quote(password, safe='')
+                  print(f'postgresql://{user}:{quoted}@{host}:5432/postgres')
+                  break
+          else:
+              print('IPv4 で到達できる接続先が見つかりませんでした。'
+                    'ダッシュボードの Connect → Session pooler の URI を'
+                    ' Secret SUPABASE_DB_URL に登録してください。', file=sys.stderr)
+              sys.exit(1)
           PY
           url="$(cat /tmp/db_url)"
           rm -f /tmp/db_url
