@@ -45,6 +45,14 @@ concurrency:
   group: supabase-migrate
   cancel-in-progress: false
 
+env:
+  # Supabase CLI は版を固定する。`latest` にすると setup-cli が
+  # api.github.com/repos/supabase/cli/releases/latest を認証なしで叩き、
+  # runner の IP 単位 60回/時のレート制限に当たって取得が落ちることがある
+  # （実際に発生済み）。版を書けばこの API 呼び出し自体が起きない。
+  # 更新するときは ci.yml と揃えること。
+  SUPABASE_CLI_VERSION: 2.112.0
+
 permissions:
   contents: read
 
@@ -68,7 +76,7 @@ jobs:
 
       - uses: supabase/setup-cli@v1
         with:
-          version: latest
+          version: ${{ env.SUPABASE_CLI_VERSION }}
 
       - name: Secrets / Variables の有無を確認
         env:
