@@ -6,6 +6,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/error/app_failure.dart';
 import '../../../core/logging/app_logger.dart';
 import '../../../core/supabase/supabase_providers.dart';
+import '../../auth/data/profile_repository.dart';
+import '../../auth/domain/client_profile.dart';
 import '../../search/domain/criteria.dart';
 import '../../search/domain/masked_count.dart';
 import '../domain/campaign_draft.dart';
@@ -72,36 +74,6 @@ class ClientCampaignRepository {
           FailureKind.unauthorized, 'ログインの有効期限が切れました。ログインし直してください。');
     }
     return userId;
-  }
-
-  /// 店舗プロフィールから案件フォームの初期値を引く。
-  Future<StoreDefaults> fetchStoreDefaults() async {
-    final String userId = _requireUserId();
-    try {
-      final Map<String, dynamic>? row = await _client
-          .from('client_profiles')
-          .select('store_name, genre_ids, prefecture_id, city_id, '
-              'latitude, longitude, nearest_station_id')
-          .eq('user_id', userId)
-          .maybeSingle();
-      final List<int> genreIds = (row?['genre_ids'] as List<dynamic>? ??
-              <dynamic>[])
-          .map((dynamic e) => e as int)
-          .toList();
-      return StoreDefaults(
-        storeName: row?['store_name'] as String? ?? '',
-        genreId: genreIds.isEmpty ? null : genreIds.first,
-        prefectureId: row?['prefecture_id'] as int?,
-        cityId: row?['city_id'] as int?,
-        latitude: (row?['latitude'] as num?)?.toDouble(),
-        longitude: (row?['longitude'] as num?)?.toDouble(),
-        nearestStationId: row?['nearest_station_id'] as int?,
-      );
-    } on Object catch (e, s) {
-      final AppFailure failure = AppFailure.from(e);
-      AppLogger.error('client_campaign.defaults_failed', failure.code, s);
-      throw failure;
-    }
   }
 
   /// 案件を作成する。[publish] が false なら下書きとして保存する。
@@ -522,10 +494,24 @@ final FutureProvider<List<ClientCampaign>> ownCampaignsProvider =
 );
 
 /// 案件フォームの初期値（店舗プロフィールのスナップショット）。
+///
+/// 店舗プロフィール本体と同じ Provider から導くことで、
+/// 店舗情報を編集したら次に開く案件フォームの初期値も追従する。
 final FutureProvider<StoreDefaults> storeDefaultsProvider =
-    FutureProvider<StoreDefaults>(
-  (Ref ref) => ref.watch(clientCampaignRepositoryProvider).fetchStoreDefaults(),
-);
+    FutureProvider<StoreDefaults>((Ref ref) async {
+  final ClientProfile? profile = await ref.watch(clientProfileProvider.future);
+  return StoreDefaults(
+    storeName: profile?.storeName ?? '',
+    genreId: profile == null || profile.genreIds.isEmpty
+        ? null
+        : profile.genreIds.first,
+    prefectureId: profile?.prefectureId,
+    cityId: profile?.cityId,
+    latitude: profile?.latitude,
+    longitude: profile?.longitude,
+    nearestStationId: profile?.nearestStationId,
+  );
+});
 
 /// 編集画面が読む案件 1 件。保存後は invalidate して読み直す。
 final FutureProviderFamily<EditableCampaign, String> editableCampaignProvider =
