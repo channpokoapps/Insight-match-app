@@ -135,6 +135,19 @@ class SettingsPage extends ConsumerWidget {
             ),
             const SizedBox(height: 16),
           ],
+          if (profile?.role == AppRole.client) ...<Widget>[
+            _SectionCard(
+              children: <Widget>[
+                _MenuTile(
+                  icon: Icons.storefront_outlined,
+                  title: '店舗情報',
+                  subtitle: '店名・所在地・ジャンル・紹介文の変更',
+                  onTap: () => context.push(AppRoutes.storeProfile),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+          ],
           if (profile?.role == AppRole.creator) ...<Widget>[
             _SectionCard(
               children: <Widget>[

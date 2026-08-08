@@ -6,6 +6,7 @@ import '../../../core/error/app_failure.dart';
 import '../../../core/logging/app_logger.dart';
 import '../../../core/supabase/supabase_providers.dart';
 import '../domain/app_role.dart';
+import '../domain/client_profile.dart';
 import '../domain/registration_step.dart';
 
 /// ログイン中ユーザーのプロフィール取得と初回登録フローの書き込み。
@@ -118,7 +119,31 @@ class ProfileRepository {
     }
   }
 
+  /// 自分の PR依頼者プロフィールを返す。未登録なら null。
+  ///
+  /// 登録後の編集画面（FR-AUTH-07）と、案件フォームの初期値（FR-CMP-02）が読む。
+  Future<ClientProfile?> fetchClientProfile() async {
+    final String userId = _requireUserId();
+    try {
+      final Map<String, dynamic>? row = await _client
+          .from('client_profiles')
+          .select('store_name, genre_ids, genre_other_text, postal_code, '
+              'prefecture_id, city_id, address_line, latitude, longitude, '
+              'nearest_station_id, contact_email, description')
+          .eq('user_id', userId)
+          .maybeSingle();
+      return row == null ? null : ClientProfile.fromJson(row);
+    } on Object catch (e, s) {
+      final AppFailure failure = AppFailure.from(e);
+      AppLogger.error('profile.client_fetch_failed', failure.code, s);
+      throw failure;
+    }
+  }
+
   /// PR依頼者（店舗）プロフィールを保存し、アカウントを利用可能にする。
+  ///
+  /// 初回登録と登録後の編集（FR-AUTH-07）で共用する。upsert のため
+  /// 既存行があれば上書きし、アカウント状態は pending のときだけ active にする。
   ///
   /// [genreIds] は飲食ジャンルの複数選択。「その他」を選んだときだけ
   /// [genreOtherText] に自由記述が入る（運営がマスタ昇格の判断に使う）。
@@ -236,6 +261,16 @@ final FutureProvider<UserProfile?> myProfileProvider =
 final Provider<AppRole?> myRoleProvider = Provider<AppRole?>(
   (Ref ref) => ref.watch(myProfileProvider).valueOrNull?.role,
 );
+
+/// 自分の店舗プロフィール。未登録なら null。
+///
+/// 編集して保存したら invalidate する。案件フォームの初期値
+/// （`storeDefaultsProvider`）もこれを見ているため、同時に追従する。
+final FutureProvider<ClientProfile?> clientProfileProvider =
+    FutureProvider<ClientProfile?>((Ref ref) {
+  ref.watch(authStateProvider);
+  return ref.watch(profileRepositoryProvider).fetchClientProfile();
+});
 
 /// 初回登録フローの進行段階。未ログイン時は null。
 ///

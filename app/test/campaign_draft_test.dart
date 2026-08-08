@@ -39,6 +39,70 @@ void main() {
         hashtags: hashtags,
       );
 
+  group('CampaignDraft.validateStep', () {
+    test('その段階に無い項目の不足では止めない', () {
+      // 未入力の後続段階を理由に進行を止めない（段階入力の前提）。
+      expect(
+        draft(requiredContent: '', quota: null)
+            .validateStep(CampaignFormStep.basics, now: now),
+        isNull,
+      );
+      expect(
+        draft(title: '').validateStep(CampaignFormStep.terms, now: now),
+        isNull,
+      );
+      expect(
+        draft(title: '', quota: null)
+            .validateStep(CampaignFormStep.instructions, now: now),
+        isNull,
+      );
+    });
+
+    test('その段階の項目の不足は検出する', () {
+      expect(
+        draft(title: ' ').validateStep(CampaignFormStep.basics, now: now),
+        contains('タイトル'),
+      );
+      expect(
+        draft(quota: 0).validateStep(CampaignFormStep.terms, now: now),
+        contains('募集人数'),
+      );
+      expect(
+        draft(visitStartDate: DateTime(2026, 8, 11))
+            .validateStep(CampaignFormStep.terms, now: now),
+        contains('訪問開始日'),
+      );
+      expect(
+        draft(requiredContent: '')
+            .validateStep(CampaignFormStep.instructions, now: now),
+        contains('必須投稿内容'),
+      );
+    });
+
+    test('応募条件と確認の段階はここでは検証しない', () {
+      // 条件式の検証は CriteriaEditor が持つ。
+      expect(
+        draft().validateStep(CampaignFormStep.criteria, now: now),
+        isNull,
+      );
+      expect(
+        draft(title: '').validateStep(CampaignFormStep.confirm, now: now),
+        isNull,
+      );
+    });
+  });
+
+  group('CampaignFormStep', () {
+    test('先頭と末尾では前後に進みすぎない', () {
+      expect(CampaignFormStep.basics.previous, CampaignFormStep.basics);
+      expect(CampaignFormStep.confirm.next, CampaignFormStep.confirm);
+      expect(CampaignFormStep.basics.next, CampaignFormStep.criteria);
+      expect(CampaignFormStep.confirm.previous, CampaignFormStep.instructions);
+      expect(CampaignFormStep.basics.isFirst, isTrue);
+      expect(CampaignFormStep.confirm.isLast, isTrue);
+    });
+  });
+
   group('CampaignDraft.validate', () {
     test('すべての項目がそろっていれば null を返す', () {
       expect(draft().validate(now: now), isNull);

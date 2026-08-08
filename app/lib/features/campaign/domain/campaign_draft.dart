@@ -34,6 +34,35 @@ enum CampaignPlatform {
 /// ステマ規制対応の広告表記タグ。サーバー側で自動付与され削除できない（OI-04）。
 const String adDisclosureTag = '#PR';
 
+/// 案件作成の入力段階（SCR-CLI-03〜07）。
+///
+/// 1 画面に全項目を並べると縦に長くなりすぎるため、段階ごとに区切って
+/// 入力させる。段階の分け方は要件定義の画面一覧に合わせている。
+enum CampaignFormStep {
+  basics('店舗・提供内容'),
+  criteria('応募条件'),
+  terms('募集要項'),
+  instructions('投稿指示'),
+  confirm('確認');
+
+  const CampaignFormStep(this.label);
+
+  /// 画面に出す段階名。
+  final String label;
+
+  bool get isFirst => index == 0;
+
+  bool get isLast => index == CampaignFormStep.values.length - 1;
+
+  /// 1 つ前の段階。先頭なら自分自身。
+  CampaignFormStep get previous =>
+      isFirst ? this : CampaignFormStep.values[index - 1];
+
+  /// 1 つ次の段階。末尾なら自分自身。
+  CampaignFormStep get next =>
+      isLast ? this : CampaignFormStep.values[index + 1];
+}
+
 /// 案件作成フォームの入力内容。
 ///
 /// 期間は日付単位で受け取り、送信時に
@@ -95,7 +124,30 @@ class CampaignDraft {
 
   /// 入力の不備を日本語で返す。問題がなければ null。
   String? validate({DateTime? now}) {
-    final DateTime today = _dateOnly(now ?? DateTime.now());
+    for (final CampaignFormStep step in CampaignFormStep.values) {
+      final String? message = validateStep(step, now: now);
+      if (message != null) {
+        return message;
+      }
+    }
+    return null;
+  }
+
+  /// 指定した段階までに入力すべき項目だけを検証する。
+  ///
+  /// 段階を進めるときに呼ぶ。まだ入力していない後続段階の不備を
+  /// 先出しして進行を止めないようにするための分割。
+  /// 応募条件（[CampaignFormStep.criteria]）は `CriteriaEditor` が検証する。
+  String? validateStep(CampaignFormStep step, {DateTime? now}) =>
+      switch (step) {
+        CampaignFormStep.basics => _validateBasics(),
+        CampaignFormStep.criteria => null,
+        CampaignFormStep.terms => _validateTerms(now),
+        CampaignFormStep.instructions => _validateInstructions(),
+        CampaignFormStep.confirm => null,
+      };
+
+  String? _validateBasics() {
     if (title.trim().isEmpty) {
       return '案件タイトルを入力してください。';
     }
@@ -111,11 +163,16 @@ class CampaignDraft {
     if (rewardValueJpy == null || rewardValueJpy! < 0) {
       return '提供内容の想定価格を 0 円以上で入力してください。';
     }
+    return null;
+  }
+
+  String? _validateInstructions() =>
+      requiredContent.trim().isEmpty ? '必須投稿内容を入力してください。' : null;
+
+  String? _validateTerms(DateTime? now) {
+    final DateTime today = _dateOnly(now ?? DateTime.now());
     if (quota == null || quota! < 1) {
       return '募集人数を 1 人以上で入力してください。';
-    }
-    if (requiredContent.trim().isEmpty) {
-      return '必須投稿内容を入力してください。';
     }
     if (_dateOnly(applyEndDate).isBefore(today)) {
       return '応募締切日は今日以降にしてください。';

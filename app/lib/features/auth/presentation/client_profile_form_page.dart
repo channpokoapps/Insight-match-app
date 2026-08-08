@@ -3,21 +3,29 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/address/postal_code_repository.dart';
 import '../../../core/error/app_failure.dart';
 import '../../../core/masters/master_repository.dart';
 import '../../../shared/widgets/genre_multi_select.dart';
+import '../../../shared/widgets/retry_notice.dart';
 import '../../../shared/widgets/station_picker.dart';
 import '../../../shared/widgets/submit_button.dart';
 import '../data/profile_repository.dart';
 import '../domain/auth_validators.dart';
+import '../domain/client_profile.dart';
 
-/// PR依頼者（店舗・企業）のプロフィール登録画面。
+/// PR依頼者（店舗・企業）のプロフィール入力画面（FR-AUTH-07 / SCR-CLI-01）。
 ///
+/// 初回登録と、登録後の編集で共用する。[isEdit] が true なら保存済みの
+/// 内容を読み込んで開き、保存したら前の画面へ戻る。
 /// 店舗情報は案件詳細で投稿者にも表示される（連絡先を除く）。
 class ClientProfileFormPage extends ConsumerStatefulWidget {
-  const ClientProfileFormPage({super.key});
+  const ClientProfileFormPage({this.isEdit = false, super.key});
+
+  /// 登録済みの内容を編集する画面として開くか。
+  final bool isEdit;
 
   @override
   ConsumerState<ClientProfileFormPage> createState() =>
@@ -37,6 +45,9 @@ class _ClientProfileFormPageState extends ConsumerState<ClientProfileFormPage> {
   StationHit? _nearestStation;
   bool _submitting = false;
   bool _lookingUp = false;
+
+  /// 保存済みの内容を流し込むのは 1 回だけ。再描画で入力中の値を戻さない。
+  bool _prefilled = false;
   String? _postalNotice;
   String? _error;
 
@@ -113,6 +124,49 @@ class _ClientProfileFormPageState extends ConsumerState<ClientProfileFormPage> {
     }
   }
 
+  /// 保存済みの内容をフォームへ流し込む。
+  ///
+  /// 最寄り駅は id しか持っていないため、表示名は別途引く（失敗しても
+  /// 選び直せるよう、画面は止めない）。
+  void _prefill(ClientProfile profile) {
+    if (_prefilled) {
+      return;
+    }
+    _prefilled = true;
+    _storeName.text = profile.storeName;
+    _genreIds
+      ..clear()
+      ..addAll(profile.genreIds);
+    _genreOther.text = profile.genreOtherText ?? '';
+    // 保存済みの郵便番号で住所検索を走らせない。走らせると登録済みの
+    // 住所・市区町村を郵便番号由来の値で上書きしてしまう。
+    _postalCode.removeListener(_onPostalCodeChanged);
+    _postalCode.text = profile.postalCode ?? '';
+    _postalCode.addListener(_onPostalCodeChanged);
+    _prefectureId = profile.prefectureId;
+    _cityId = profile.cityId;
+    _addressLine.text = profile.addressLine ?? '';
+    _contactEmail.text = profile.contactEmail ?? '';
+    _description.text = profile.description ?? '';
+    final int? stationId = profile.nearestStationId;
+    if (stationId != null) {
+      unawaited(_loadStationLabel(stationId));
+    }
+  }
+
+  Future<void> _loadStationLabel(int stationId) async {
+    try {
+      final StationHit? station =
+          await ref.read(masterRepositoryProvider).fetchStation(stationId);
+      if (station != null && mounted) {
+        setState(() => _nearestStation = station);
+      }
+    } on AppFailure {
+      // 表示名を引けなくても登録済みの駅は保持したいが、名前のない
+      // 選択肢は誤解を生む。選び直しに任せる。
+    }
+  }
+
   /// 「その他」を選んでいるときだけ自由記述を送る。
   String? _genreOtherText() {
     final List<MasterItem> genres =
@@ -162,7 +216,19 @@ class _ClientProfileFormPageState extends ConsumerState<ClientProfileFormPage> {
                 ? null
                 : _description.text.trim(),
           );
+      ref.invalidate(clientProfileProvider);
+      // 登録フローでは router が次の段階へ進める。編集では前の画面へ戻る。
       ref.invalidate(registrationStepProvider);
+      if (!widget.isEdit) {
+        return;
+      }
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('店舗情報を更新しました。')),
+      );
+      context.pop();
     } on AppFailure catch (failure) {
       setState(() => _error = failure.message);
     } finally {
@@ -174,182 +240,212 @@ class _ClientProfileFormPageState extends ConsumerState<ClientProfileFormPage> {
 
   @override
   Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(widget.isEdit ? '店舗情報の編集' : '店舗情報の登録（PR依頼者）'),
+      ),
+      body: widget.isEdit ? _buildEditBody() : _buildForm(context),
+    );
+  }
+
+  /// 編集時は保存済みの内容が読めるまで待つ。
+  ///
+  /// 読めないまま開くと、空欄を保存して既存の内容を消してしまうため、
+  /// 失敗したときはフォームを出さずに再試行を促す。
+  Widget _buildEditBody() {
+    final AsyncValue<ClientProfile?> profile = ref.watch(clientProfileProvider);
+    return profile.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (Object e, StackTrace _) => RetryNotice(
+        message: '店舗情報を取得できませんでした。${AppFailure.from(e).message}',
+        onRetry: () => ref.invalidate(clientProfileProvider),
+      ),
+      data: (ClientProfile? value) {
+        if (value != null) {
+          _prefill(value);
+        }
+        return _buildForm(context);
+      },
+    );
+  }
+
+  Widget _buildForm(BuildContext context) {
     final AsyncValue<List<MasterItem>> prefectures =
         ref.watch(prefecturesProvider);
     final AsyncValue<List<MasterItem>> genres = ref.watch(genresProvider);
     final AsyncValue<List<MasterItem>>? cities = _prefectureId == null
         ? null
         : ref.watch(citiesProvider(_prefectureId!));
-    return Scaffold(
-      appBar: AppBar(title: const Text('店舗情報の登録（PR依頼者）')),
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 480),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: <Widget>[
-                  TextField(
-                    controller: _storeName,
-                    decoration: const InputDecoration(labelText: '店舗・企業名'),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _postalCode,
-                    keyboardType: TextInputType.number,
-                    inputFormatters: <TextInputFormatter>[
-                      FilteringTextInputFormatter.digitsOnly,
-                      LengthLimitingTextInputFormatter(7),
-                    ],
-                    decoration: InputDecoration(
-                      labelText: '郵便番号（任意）',
-                      helperText: '7 桁を入力すると住所を自動で入力します',
-                      helperMaxLines: 2,
-                      suffixIcon: _lookingUp
-                          ? const Padding(
-                              padding: EdgeInsets.all(12),
-                              child: SizedBox(
-                                width: 20,
-                                height: 20,
-                                child:
-                                    CircularProgressIndicator(strokeWidth: 2),
-                              ),
-                            )
-                          : null,
-                    ),
-                  ),
-                  if (_postalNotice != null) ...<Widget>[
-                    const SizedBox(height: 4),
-                    Text(
-                      _postalNotice!,
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
+    return SafeArea(
+      child: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 480),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                TextField(
+                  controller: _storeName,
+                  enabled: !_submitting,
+                  decoration: const InputDecoration(labelText: '店舗・企業名'),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _postalCode,
+                  enabled: !_submitting,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: <TextInputFormatter>[
+                    FilteringTextInputFormatter.digitsOnly,
+                    LengthLimitingTextInputFormatter(7),
                   ],
-                  const SizedBox(height: 16),
-                  GenreMultiSelect(
-                    label: 'ジャンル（複数選択できます）',
-                    genres: genres,
-                    selectedIds: _genreIds,
-                    otherController: _genreOther,
-                    enabled: !_submitting,
-                    onToggle: (int id, bool selected) => setState(() {
-                      if (selected) {
-                        _genreIds.add(id);
-                      } else {
-                        _genreIds.remove(id);
-                      }
-                    }),
+                  decoration: InputDecoration(
+                    labelText: '郵便番号（任意）',
+                    helperText: '7 桁を入力すると住所を自動で入力します',
+                    helperMaxLines: 2,
+                    suffixIcon: _lookingUp
+                        ? const Padding(
+                            padding: EdgeInsets.all(12),
+                            child: SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          )
+                        : null,
                   ),
-                  const SizedBox(height: 16),
-                  DropdownButtonFormField<int>(
-                    // 郵便番号から自動入力したときに表示へ反映させるため、
-                    // 選択値をキーにして作り直す。
-                    key: ValueKey<String>('pref-$_prefectureId'),
-                    initialValue: _prefectureId,
-                    decoration: const InputDecoration(labelText: '都道府県'),
-                    items: <DropdownMenuItem<int>>[
-                      for (final MasterItem p
-                          in prefectures.valueOrNull ?? <MasterItem>[])
-                        DropdownMenuItem<int>(value: p.id, child: Text(p.name)),
-                    ],
-                    onChanged: _submitting
-                        ? null
-                        : (int? value) => setState(() {
-                              _prefectureId = value;
-                              _cityId = null;
-                            }),
-                  ),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<int>(
-                    // 都道府県を変えたら市区町村の選択をリセットして作り直す。
-                    // 郵便番号からの自動入力も同じ経路で表示に反映する。
-                    key: ValueKey<String>('city-$_prefectureId-$_cityId'),
-                    initialValue: _cityId,
-                    decoration: const InputDecoration(
-                      labelText: '市区町村（任意）',
-                    ),
-                    items: <DropdownMenuItem<int>>[
-                      for (final MasterItem c
-                          in cities?.valueOrNull ?? <MasterItem>[])
-                        DropdownMenuItem<int>(value: c.id, child: Text(c.name)),
-                    ],
-                    onChanged: _submitting || _prefectureId == null
-                        ? null
-                        : (int? value) => setState(() => _cityId = value),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _addressLine,
-                    decoration: const InputDecoration(
-                      labelText: '住所（任意）',
-                      helperText: '案件詳細で投稿者に表示されます',
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  // 投稿者は沿線・駅で案件を探すため、最寄り駅の登録が
-                  // そのまま検索でのヒットしやすさになる。
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.train_outlined),
-                    title: Text(_nearestStation?.name ?? '最寄り駅（任意）'),
-                    subtitle: Text(
-                      _nearestStation?.lineName ?? '投稿者が沿線から探せるようになります',
-                    ),
-                    trailing: _nearestStation == null
-                        ? const Icon(Icons.chevron_right)
-                        : IconButton(
-                            icon: const Icon(Icons.close),
-                            onPressed: _submitting
-                                ? null
-                                : () =>
-                                    setState(() => _nearestStation = null),
-                          ),
-                    onTap: _submitting
-                        ? null
-                        : () async {
-                            final StationHit? picked =
-                                await showStationPicker(context);
-                            if (picked != null && mounted) {
-                              setState(() => _nearestStation = picked);
-                            }
-                          },
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _contactEmail,
-                    keyboardType: TextInputType.emailAddress,
-                    decoration: const InputDecoration(
-                      labelText: '連絡先メールアドレス（任意）',
-                      helperText: '運営からの連絡にのみ使用します',
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _description,
-                    maxLines: 3,
-                    decoration: const InputDecoration(
-                      labelText: '店舗紹介（任意）',
-                      alignLabelWithHint: true,
-                    ),
-                  ),
-                  if (_error != null) ...<Widget>[
-                    const SizedBox(height: 12),
-                    Text(
-                      _error!,
-                      style:
-                          TextStyle(color: Theme.of(context).colorScheme.error),
-                    ),
-                  ],
-                  const SizedBox(height: 24),
-                  SubmitButton(
-                    label: '登録してはじめる',
-                    submitting: _submitting,
-                    onPressed: _save,
+                ),
+                if (_postalNotice != null) ...<Widget>[
+                  const SizedBox(height: 4),
+                  Text(
+                    _postalNotice!,
+                    style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ],
-              ),
+                const SizedBox(height: 16),
+                GenreMultiSelect(
+                  label: 'ジャンル（複数選択できます）',
+                  genres: genres,
+                  selectedIds: _genreIds,
+                  otherController: _genreOther,
+                  enabled: !_submitting,
+                  onToggle: (int id, bool selected) => setState(() {
+                    if (selected) {
+                      _genreIds.add(id);
+                    } else {
+                      _genreIds.remove(id);
+                    }
+                  }),
+                ),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<int>(
+                  // 郵便番号から自動入力したときに表示へ反映させるため、
+                  // 選択値をキーにして作り直す。
+                  key: ValueKey<String>('pref-$_prefectureId'),
+                  initialValue: _prefectureId,
+                  decoration: const InputDecoration(labelText: '都道府県'),
+                  items: <DropdownMenuItem<int>>[
+                    for (final MasterItem p
+                        in prefectures.valueOrNull ?? <MasterItem>[])
+                      DropdownMenuItem<int>(value: p.id, child: Text(p.name)),
+                  ],
+                  onChanged: _submitting
+                      ? null
+                      : (int? value) => setState(() {
+                            _prefectureId = value;
+                            _cityId = null;
+                          }),
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<int>(
+                  // 都道府県を変えたら市区町村の選択をリセットして作り直す。
+                  // 郵便番号からの自動入力も同じ経路で表示に反映する。
+                  key: ValueKey<String>('city-$_prefectureId-$_cityId'),
+                  initialValue: _cityId,
+                  decoration: const InputDecoration(
+                    labelText: '市区町村（任意）',
+                  ),
+                  items: <DropdownMenuItem<int>>[
+                    for (final MasterItem c
+                        in cities?.valueOrNull ?? <MasterItem>[])
+                      DropdownMenuItem<int>(value: c.id, child: Text(c.name)),
+                  ],
+                  onChanged: _submitting || _prefectureId == null
+                      ? null
+                      : (int? value) => setState(() => _cityId = value),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _addressLine,
+                  enabled: !_submitting,
+                  decoration: const InputDecoration(
+                    labelText: '住所（任意）',
+                    helperText: '案件詳細で投稿者に表示されます',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                // 投稿者は沿線・駅で案件を探すため、最寄り駅の登録が
+                // そのまま検索でのヒットしやすさになる。
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.train_outlined),
+                  title: Text(_nearestStation?.name ?? '最寄り駅（任意）'),
+                  subtitle: Text(
+                    _nearestStation?.lineName ?? '投稿者が沿線から探せるようになります',
+                  ),
+                  trailing: _nearestStation == null
+                      ? const Icon(Icons.chevron_right)
+                      : IconButton(
+                          icon: const Icon(Icons.close),
+                          onPressed: _submitting
+                              ? null
+                              : () => setState(() => _nearestStation = null),
+                        ),
+                  onTap: _submitting
+                      ? null
+                      : () async {
+                          final StationHit? picked =
+                              await showStationPicker(context);
+                          if (picked != null && mounted) {
+                            setState(() => _nearestStation = picked);
+                          }
+                        },
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _contactEmail,
+                  enabled: !_submitting,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: const InputDecoration(
+                    labelText: '連絡先メールアドレス（任意）',
+                    helperText: '運営からの連絡にのみ使用します',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _description,
+                  enabled: !_submitting,
+                  maxLines: 3,
+                  decoration: const InputDecoration(
+                    labelText: '店舗紹介（任意）',
+                    alignLabelWithHint: true,
+                  ),
+                ),
+                if (_error != null) ...<Widget>[
+                  const SizedBox(height: 12),
+                  Text(
+                    _error!,
+                    style:
+                        TextStyle(color: Theme.of(context).colorScheme.error),
+                  ),
+                ],
+                const SizedBox(height: 24),
+                SubmitButton(
+                  label: widget.isEdit ? '変更を保存' : '登録してはじめる',
+                  submitting: _submitting,
+                  onPressed: _save,
+                ),
+              ],
             ),
           ),
         ),

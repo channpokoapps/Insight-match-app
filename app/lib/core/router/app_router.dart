@@ -138,6 +138,12 @@ final Provider<GoRouter> appRouterProvider = Provider<GoRouter>((Ref ref) {
         builder: (BuildContext context, GoRouterState state) =>
             const DataSourcesPage(),
       ),
+      // 登録後の店舗情報の変更（FR-AUTH-07）。入口はマイページ。
+      GoRoute(
+        path: AppRoutes.storeProfile,
+        builder: (BuildContext context, GoRouterState state) =>
+            const ClientProfileFormPage(isEdit: true),
+      ),
       GoRoute(
         path: AppRoutes.snsLink,
         builder: (BuildContext context, GoRouterState state) =>
@@ -240,6 +246,11 @@ String? _redirect(Ref ref, GoRouterState state) {
           location.startsWith(AppRoutes.clientHome)) {
         return AppRoutes.campaignList;
       }
+      // 店舗情報はマイページ配下にあるが PR依頼者だけのものなので個別に弾く。
+      if (registration.role != AppRole.client &&
+          location == AppRoutes.storeProfile) {
+        return AppRoutes.settings;
+      }
       return null;
   }
 }
@@ -263,6 +274,7 @@ class AppRoutes {
   static String campaignEdit(String id) => '/client/campaigns/$id/edit';
   static const String settings = '/settings';
   static const String dataSources = '/settings/data-sources';
+  static const String storeProfile = '/settings/store-profile';
   static const String snsLink = '/sns-link';
 
   static String campaignDetail(String id) => '/campaigns/$id';
