@@ -1,8 +1,15 @@
 # GitHub 自動化（Claude 連携・自動デプロイ）の初回セットアップ
 
+> **現在の状態（2026-08-13〜）**: Firebase / Google Cloud の運用を停止したため（
+> [ADR-0007](../adr/0007-pause-firebase-gcp.md)）、本ドキュメントが扱うワークフローのうち
+> `deploy_preview.yml` / `deploy_production.yml` / `setup_auth.yml` / `android_build.yml` は
+> **リポジトリから削除済み**。§2・§4・§5 は Firebase を再設定してこれらを復元する場合の
+> 参照用として残している。§1（Claude 連携）と §6（Supabase の DB 反映）は現在も有効。
+
 [poc_guide.md](../poc_guide.md) のループ（Issue → Claude が実装 → プレビュー →
 マージ → 本番反映 → APK 配布）を動かすために、**管理者が PC で 1 回だけ**行う設定。
 ここが終わっていないと、各ワークフローは「Secrets 未設定」の案内を出してスキップする。
+（上記のとおり、一部ワークフローは現在削除されている。）
 
 前提: PC に `gh`（GitHub CLI）・`firebase`・`claude` の各 CLI が入っていて、
 `gh auth login` と `firebase login` が済んでいること。
