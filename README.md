@@ -31,6 +31,11 @@
 
 選定理由は [docs/adr/](docs/adr/) を参照。
 
+> **現在の状態（2026-08-13〜）**: 費用が発生しうるリソースを整理するため、Firebase / Google Cloud
+> 向けの自動デプロイ等は CI から削除済み。運営者が Firebase / GCP プロジェクトを削除すると、
+> Web 版ホスティング・GA4・Google サインインが停止する（Supabase 側の機能・メール＋パスワードの
+> ログインには影響なし）。詳細と再設定手順は [ADR-0007](docs/adr/0007-pause-firebase-gcp.md) を参照。
+
 **お試し Web 版 → Android 誘導の導線**: Web 版は案件閲覧のみ可能で、応募などの
 アクション時にインストール導線を表示する（`app/lib/core/platform/platform_capability.dart`）。
 「Android アプリを入手」「iOS 版 (Coming Soon)」のタップ数は GA4 の
@@ -58,9 +63,9 @@
 │   └── config.toml
 ├── config/app_config.json     公開設定値（ストア URL・規約バージョン等）
 ├── env/                       接続情報テンプレート（*.example.json をコピーして使う）
-├── firebase.json              Firebase Hosting（お試し Web 版）の設定
+├── firebase.json              Firebase Hosting（お試し Web 版）の設定。運用は現在停止中（§2 の注記参照）
 ├── .github/workflows/         CI（ci.yml）のほか、PR 自動作成（auto-pr.yml）、
-│                              自動レビュー、プレビュー / 本番デプロイ、APK ビルド
+│                              自動レビュー、Supabase マイグレーション反映（supabase_migrate.yml）
 └── docs/
     ├── requirements/          要件定義書（全13章）
     ├── adr/                   アーキテクチャ決定記録
@@ -101,7 +106,9 @@ flutter run -d chrome --dart-define-from-file=../env/local.json  # Web お試し
 
 詳細は [CONTRIBUTING.md](CONTRIBUTING.md) を参照。
 
-### お試し Web 版のデプロイ（Firebase Hosting）
+### お試し Web 版のデプロイ（Firebase Hosting、現在運用停止中）
+
+CI からの自動デプロイは削除済み。Firebase プロジェクト自体を削除した場合、以下は Firebase を再設定した後にのみ有効（[ADR-0007](docs/adr/0007-pause-firebase-gcp.md)）。
 
 ```bash
 cd app

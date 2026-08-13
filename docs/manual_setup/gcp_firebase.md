@@ -1,5 +1,11 @@
 # Firebase（Hosting / GA4 / FCM）の設定
 
+> **現在の状態（2026-08-13〜）**: 費用が発生しうるリソースを整理するため、Firebase / Google Cloud
+> プロジェクトの運用を停止している（[ADR-0007](../adr/0007-pause-firebase-gcp.md)）。
+> `insight-match-2fbaa` プロジェクトの削除は運営者が手動で行う必要があり、これに連動して
+> Firebase Hosting へ自動デプロイするワークフロー等はリポジトリから削除済み。
+> 以下の手順は**再度 Firebase を有効化する場合**の参照用として残している。
+
 Firebase は次の 3 つだけに使う。バックエンドは Supabase（[supabase.md](supabase.md)）。
 
 | 用途 | サービス | 費用 |

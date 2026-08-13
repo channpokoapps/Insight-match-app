@@ -232,7 +232,9 @@ supabase functions serve sync-worker --env-file supabase\functions\.env.local
 | `supabase` | `supabase db start` + `supabase test db`（マイグレーション適用 + pgTAP） |
 | `edge-functions` | `deno task check` / `deno task test` |
 
-このほかに `.github/workflows/` には次のワークフローがあります: `auto-pr.yml`（`claude/**` push で main 向け PR を自動作成）、`claude.yml`（`@claude` メンションで起動）、`claude-code-review.yml`（PR の自動レビュー）、`deploy_preview.yml`（プレビュー環境へデプロイ）、`deploy_production.yml`（CI 成功後に本番へデプロイ）、`android_build.yml`（APK ビルド）。
+このほかに `.github/workflows/` には次のワークフローがあります: `auto-pr.yml`（`claude/**` push で main 向け PR を自動作成）、`claude.yml`（`@claude` メンションで起動）、`claude-code-review.yml`（PR の自動レビュー）、`supabase_migrate.yml`（本番 DB マイグレーションの確認・反映を手動実行）。
+
+【事実】Firebase Hosting へのプレビュー/本番デプロイ（`deploy_preview.yml` / `deploy_production.yml`）と APK 配布（`android_build.yml`）は、費用が発生しうるリソースを整理するため 2026-08-13 に削除しました。詳細と復元手順は [ADR-0007](adr/0007-pause-firebase-gcp.md) を参照してください。
 
 【推奨】ローカルで A-5〜A-7 を通してから push してください。CI で試行錯誤すると 1 回あたり数分待つことになります。
 
