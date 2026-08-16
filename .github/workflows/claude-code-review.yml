@@ -40,6 +40,14 @@ jobs:
 
       - name: Claude によるコードレビューを実行
         id: claude-review
+        # 自動レビューは「補助」であり、マージ・デプロイの必須条件ではない
+        # （必須の品質ゲートは ci.yml のテスト。AGENTS.md §5）。
+        # Claude の利用枠切れ（Pro / Max の usage limit）などでレビューが実行
+        # できないとき、ここが赤 × になると poc_guide.md §2-⑤ の
+        # 「チェックが全部緑か」に引っかかり、マージ＝デプロイが止まってしまう。
+        # そのため失敗してもジョブは緑のまま通し、下のステップがワーニングと
+        # PR コメントで「レビューは実行できなかった」ことを知らせる。
+        continue-on-error: true
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
@@ -60,3 +68,33 @@ jobs:
           # ツール一覧と同じものを --allowedTools でセッション全体に許可する。
           claude_args: |
             --allowedTools "Bash(gh issue view:*),Bash(gh search:*),Bash(gh issue list:*),Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr list:*),mcp__github_inline_comment__create_inline_comment"
+
+      - name: レビューが実行できなかったことをワーニングで知らせる
+        if: steps.claude-review.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          echo "::warning::自動レビューを実行できませんでした（Claude の利用枠切れが典型）。マージとデプロイは可能ですが、差分の確認は人間が行ってください。"
+          {
+            echo '## ⚠️ 自動レビューは実行できませんでした'
+            echo ''
+            echo 'Claude の利用枠切れなどが原因と考えられます。チェックは赤にせず、ワーニング止まりにしています。'
+            echo '- **マージ（＝デプロイ）はこのままでも可能**です。必須の品質ゲートは CI のテストの方です。'
+            echo '- 枠が回復したら、PR に `@claude レビューして` とコメントすると再実行できます。'
+          } >> "$GITHUB_STEP_SUMMARY"
+          # PR を見るだけの運用者（スマホ）にも伝わるようにコメントを残す。
+          # コメント投稿に失敗しても、このジョブ自体は赤にしない（赤にすると
+          # ワーニング化の目的が崩れるため）。
+          body="$(cat <<'EOF'
+          ⚠️ **自動レビューは実行できませんでした**（Claude の利用枠切れが典型）。
+
+          - **マージ（＝デプロイ）はこのままでも可能**です。テスト（CI）が緑であることは別途確認してください。
+          - レビューが無いぶん、**Files changed で差分を自分の目で確認**してからマージしてください。特に `supabase/` に変更がある場合はインサイト非開示ルール（R-1〜R-5）に関わるため慎重に。
+          - 枠が回復したあとに、この PR へ `@claude レビューして` とコメントすると自動レビューを再実行できます。
+          EOF
+          )"
+          gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body "$body" \
+            || echo "::warning::PR へのコメント投稿に失敗しました。実行ログ: ${RUN_URL}"

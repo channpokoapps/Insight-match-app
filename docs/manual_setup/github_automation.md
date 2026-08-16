@@ -28,7 +28,7 @@
 | ワークフロー | 動くために必要なもの | 未設定のときの挙動 |
 | --- | --- | --- |
 | `claude.yml`（Issue から実装） | Claude GitHub App ＋ Secret `CLAUDE_CODE_OAUTH_TOKEN` | ジョブが失敗する |
-| `claude-code-review.yml`（PR 自動レビュー） | 同上 | ジョブが失敗する |
+| `claude-code-review.yml`（PR 自動レビュー） | 同上 | ワーニングを出して緑のまま終わる（PR にその旨をコメント。マージは止まらない） |
 | `deploy_preview.yml`（PR のプレビュー） | §2・§3 の Secrets / Variables | 案内を出してスキップ |
 | `deploy_production.yml`（本番反映） | §2・§3 の Secrets / Variables | 案内を出してスキップ |
 | `android_build.yml`（APK 配布） | §2・§3・§5 の Secrets / Variables | ジョブが失敗する |
